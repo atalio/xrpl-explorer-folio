@@ -22,13 +22,12 @@ export interface TransactionDetail extends Transaction {
   raw: any;
 }
 
-// Update endpoints to use CORS-friendly ones
+// Update endpoints to use more reliable, CORS-friendly ones
 const XRPL_ENDPOINTS = [
-  "https://xrplcluster.com/",
-  "https://xrpl.ws/",
-  "https://testnet.xrpl-labs.com/",
-  "https://xrpl.link/"
-];
+  "https://xrplcluster.com",
+  "https://xrpl.xrpl.org",
+  "https://mainnet.xrpl.org"
+].map(url => url.endsWith('/') ? url : `${url}/`);
 
 export const validateXRPLAddress = (address: string): boolean => {
   return address.startsWith('r') && address.length >= 25 && address.length <= 35;
@@ -36,6 +35,8 @@ export const validateXRPLAddress = (address: string): boolean => {
 
 const fetchFromEndpoint = async (endpoint: string, address: string): Promise<any> => {
   try {
+    console.log(`Attempting to fetch from ${endpoint}`);
+    
     const params = {
       method: "account_tx",
       params: [{
@@ -52,7 +53,9 @@ const fetchFromEndpoint = async (endpoint: string, address: string): Promise<any
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
       },
+      mode: 'cors',
       body: JSON.stringify(params)
     });
 
@@ -81,7 +84,9 @@ export const fetchTransactionDetails = async (hash: string): Promise<Transaction
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
         },
+        mode: 'cors',
         body: JSON.stringify({
           method: "tx",
           params: [{ transaction: hash }]
@@ -123,7 +128,6 @@ export const fetchTransactionDetails = async (hash: string): Promise<Transaction
     }
   }
 
-  toast.error("Failed to fetch transaction details from all endpoints");
   console.error("All endpoints failed:", lastError);
   return null;
 };
@@ -133,7 +137,6 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
 
   for (const endpoint of XRPL_ENDPOINTS) {
     try {
-      console.log(`Attempting to fetch from ${endpoint}`);
       const data = await fetchFromEndpoint(endpoint, address);
       
       if (!data.result || !data.result.transactions) {
@@ -166,7 +169,6 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
     }
   }
 
-  toast.error("Failed to fetch transactions from all endpoints");
   console.error("All endpoints failed:", lastError);
   return [];
 };
@@ -180,7 +182,9 @@ export const fetchBalance = async (address: string): Promise<string> => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
         },
+        mode: 'cors',
         body: JSON.stringify({
           method: "account_info",
           params: [{
@@ -208,7 +212,6 @@ export const fetchBalance = async (address: string): Promise<string> => {
     }
   }
 
-  toast.error("Failed to fetch balance from all endpoints");
   console.error("All balance endpoints failed:", lastError);
   return '0';
 };
