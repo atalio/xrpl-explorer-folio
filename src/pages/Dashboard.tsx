@@ -1,11 +1,12 @@
 
 import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
-import { fetchTransactions, fetchBalance, type Transaction } from "../services/xrpl";
+import { useParams, Link, useNavigate } from "react-router-dom";
+import { fetchTransactions, fetchBalance, type Transaction, validateXRPLAddress } from "../services/xrpl";
 import { toast } from "sonner";
 import QRCode from "qrcode";
-import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
-import { useNavigate } from "react-router-dom";
+import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 const Dashboard = () => {
   const { address } = useParams<{ address: string }>();
@@ -13,6 +14,7 @@ const Dashboard = () => {
   const [balance, setBalance] = useState<string>("0");
   const [loading, setLoading] = useState(true);
   const [qrCode, setQrCode] = useState<string>("");
+  const [searchAddress, setSearchAddress] = useState("");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -51,6 +53,20 @@ const Dashboard = () => {
     loadData();
   }, [address]);
 
+  const handleSearch = () => {
+    if (!searchAddress) {
+      toast.error("Please enter an XRPL address");
+      return;
+    }
+
+    if (!validateXRPLAddress(searchAddress)) {
+      toast.error("Invalid XRPL address format");
+      return;
+    }
+
+    navigate(`/dashboard/${searchAddress}`);
+  };
+
   const handleAddressClick = (clickedAddress: string) => {
     navigate(`/dashboard/${clickedAddress}`);
   };
@@ -80,7 +96,7 @@ const Dashboard = () => {
 
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
           <h1 className="text-2xl font-bold text-secondary mb-4">Account Overview</h1>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
             <div className="p-4 bg-primary/10 rounded-lg">
               <p className="text-sm text-gray-600">Address</p>
               <p className="font-mono text-sm break-all">{address}</p>
@@ -99,6 +115,16 @@ const Dashboard = () => {
               )}
             </div>
           </div>
+
+          <div className="flex gap-2">
+            <Input
+              placeholder="Enter XRPL address..."
+              value={searchAddress}
+              onChange={(e) => setSearchAddress(e.target.value)}
+              className="font-mono"
+            />
+            <Button onClick={handleSearch}>Search</Button>
+          </div>
         </div>
 
         <div className="bg-white rounded-2xl shadow-lg p-6">
@@ -109,6 +135,8 @@ const Dashboard = () => {
                 <tr className="border-b">
                   <th className="text-left p-4">Type</th>
                   <th className="text-left p-4">Hash</th>
+                  <th className="text-left p-4">From</th>
+                  <th className="text-left p-4">To</th>
                   <th className="text-left p-4">Date</th>
                   <th className="text-left p-4">Amount</th>
                   <th className="text-left p-4">Fee</th>
@@ -133,6 +161,22 @@ const Dashboard = () => {
                       >
                         {tx.hash.substring(0, 8)}...
                       </Link>
+                    </td>
+                    <td className="p-4">
+                      <button
+                        onClick={() => handleAddressClick(tx.from)}
+                        className="font-mono text-sm text-primary hover:underline"
+                      >
+                        {tx.from.substring(0, 8)}...
+                      </button>
+                    </td>
+                    <td className="p-4">
+                      <button
+                        onClick={() => handleAddressClick(tx.to)}
+                        className="font-mono text-sm text-primary hover:underline"
+                      >
+                        {tx.to.substring(0, 8)}...
+                      </button>
                     </td>
                     <td className="p-4">{tx.date}</td>
                     <td className="p-4">{tx.amount}</td>

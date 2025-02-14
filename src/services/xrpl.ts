@@ -9,6 +9,17 @@ export interface Transaction {
   fee: string;
   status: string;
   sourceTag?: string;
+  from: string;
+  to: string;
+}
+
+export interface TransactionDetail extends Transaction {
+  sequence: number;
+  memos?: string[];
+  flags: number;
+  lastLedgerSequence?: number;
+  ticketSequence?: number;
+  raw: any; // For any additional fields
 }
 
 // Define endpoints for XRPL data
@@ -53,10 +64,65 @@ const fetchFromEndpoint = async (endpoint: string, address: string): Promise<any
   return response.json();
 };
 
+export const fetchTransactionDetails = async (hash: string): Promise<TransactionDetail | null> => {
+  let lastError = null;
+
+  for (const endpoint of XRPL_ENDPOINTS) {
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          method: "tx",
+          params: [{ transaction: hash }]
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data.result && data.result) {
+        const tx = data.result;
+        const amountInDrops = parseFloat(tx.Amount || '0');
+        const amountInXRP = amountInDrops / 1_000_000;
+
+        return {
+          hash: tx.hash,
+          type: tx.TransactionType || 'Unknown',
+          date: new Date(((tx.date || 0) + 946684800) * 1000).toLocaleString(),
+          amount: `${amountInXRP.toFixed(6)} XRP`,
+          fee: (parseInt(tx.Fee || '0') / 1_000_000).toFixed(6),
+          status: tx.meta?.TransactionResult || 'unknown',
+          sourceTag: tx.SourceTag?.toString(),
+          from: tx.Account,
+          to: tx.Destination,
+          sequence: tx.Sequence,
+          flags: tx.Flags,
+          lastLedgerSequence: tx.LastLedgerSequence,
+          ticketSequence: tx.TicketSequence,
+          memos: tx.Memos?.map((memo: any) => memo.Memo.MemoData) || [],
+          raw: tx
+        };
+      }
+    } catch (error) {
+      console.error(`Error fetching from ${endpoint}:`, error);
+      lastError = error;
+      continue;
+    }
+  }
+
+  toast.error("Failed to fetch transaction details from all endpoints");
+  console.error("All endpoints failed:", lastError);
+  return null;
+};
+
 export const fetchTransactions = async (address: string): Promise<Transaction[]> => {
   let lastError = null;
 
-  // Try each endpoint until one succeeds
   for (const endpoint of XRPL_ENDPOINTS) {
     try {
       console.log(`Attempting to fetch from ${endpoint}`);
@@ -80,7 +146,9 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
           amount: `${amountInXRP.toFixed(6)} XRP`,
           fee: (parseInt(transaction.Fee || '0') / 1_000_000).toFixed(6),
           status: meta?.TransactionResult || 'unknown',
-          sourceTag: transaction.SourceTag?.toString()
+          sourceTag: transaction.SourceTag?.toString(),
+          from: transaction.Account,
+          to: transaction.Destination
         };
       });
     } catch (error) {
@@ -90,7 +158,6 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
     }
   }
 
-  // If we get here, all endpoints failed
   toast.error("Failed to fetch transactions from all endpoints");
   console.error("All endpoints failed:", lastError);
   return [];
