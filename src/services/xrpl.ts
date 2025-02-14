@@ -1,6 +1,7 @@
 
-import { Client, validate } from 'xrpl';
+import { Client, isValidClassicAddress } from 'xrpl';
 import { toast } from "sonner";
+import type { Transaction as XrplTransaction } from 'xrpl';
 
 export interface Transaction {
   hash: string;
@@ -30,7 +31,7 @@ const XRPL_SERVERS = [
 ];
 
 export const validateXRPLAddress = (address: string): boolean => {
-  return validate.isValidClassicAddress(address);
+  return isValidClassicAddress(address);
 };
 
 const getClient = async (): Promise<Client> => {
@@ -57,7 +58,7 @@ export const fetchTransactionDetails = async (hash: string): Promise<Transaction
     });
 
     if (tx.result) {
-      const txData = tx.result;
+      const txData = tx.result as any;
       const amountInDrops = parseFloat(txData.Amount?.toString() || '0');
       const amountInXRP = amountInDrops / 1_000_000;
 
