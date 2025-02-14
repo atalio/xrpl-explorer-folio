@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { fetchTransactions, fetchBalance, type Transaction, validateXRPLAddress } from "../services/xrpl";
@@ -71,6 +70,30 @@ const Dashboard = () => {
     navigate(`/dashboard/${clickedAddress}`);
   };
 
+  const getMoneyFlowIndicator = (tx: Transaction, currentAddress?: string) => {
+    if (!currentAddress) return null;
+    
+    const isOutgoing = tx.from.toLowerCase() === currentAddress.toLowerCase();
+    
+    return (
+      <div className={`flex items-center gap-1 ${
+        isOutgoing ? 'text-[#ea384c]' : 'text-[#1EAEDB]'
+      }`}>
+        {isOutgoing ? (
+          <>
+            <span className="text-xs">↓ Sent</span>
+            <span className="font-bold">{tx.amount}</span>
+          </>
+        ) : (
+          <>
+            <span className="text-xs">↑ Received</span>
+            <span className="font-bold">{tx.amount}</span>
+          </>
+        )}
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -138,7 +161,7 @@ const Dashboard = () => {
                   <th className="text-left p-4">From</th>
                   <th className="text-left p-4">To</th>
                   <th className="text-left p-4">Date</th>
-                  <th className="text-left p-4">Amount</th>
+                  <th className="text-left p-4">Flow</th>
                   <th className="text-left p-4">Fee</th>
                   <th className="text-left p-4">Status</th>
                 </tr>
@@ -179,7 +202,9 @@ const Dashboard = () => {
                       </button>
                     </td>
                     <td className="p-4">{tx.date}</td>
-                    <td className="p-4">{tx.amount}</td>
+                    <td className="p-4">
+                      {getMoneyFlowIndicator(tx, address)}
+                    </td>
                     <td className="p-4">{tx.fee}</td>
                     <td className="p-4">
                       <span className={`px-2 py-1 rounded-full text-xs ${

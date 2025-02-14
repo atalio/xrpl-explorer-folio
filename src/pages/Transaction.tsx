@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { fetchTransactionDetails, type TransactionDetail } from "../services/xrpl";
@@ -25,6 +24,27 @@ const Transaction = () => {
 
     loadTransaction();
   }, [hash]);
+
+  const getMoneyFlowIndicator = (tx: TransactionDetail, address: string) => {
+    const isOutgoing = tx.from.toLowerCase() === address.toLowerCase();
+    return (
+      <div className={`flex items-center gap-1 ${
+        isOutgoing ? 'text-[#ea384c]' : 'text-[#1EAEDB]'
+      }`}>
+        {isOutgoing ? (
+          <>
+            <span className="text-lg">↓</span>
+            <span>Sent</span>
+          </>
+        ) : (
+          <>
+            <span className="text-lg">↑</span>
+            <span>Received</span>
+          </>
+        )}
+      </div>
+    );
+  };
 
   if (loading) {
     return (
@@ -99,7 +119,10 @@ const Transaction = () => {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="p-4 bg-primary/5 rounded-lg">
                   <h3 className="font-medium text-gray-600 mb-2">Amount</h3>
-                  <p className="font-bold">{transaction.amount}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-bold">{transaction.amount}</p>
+                    {getMoneyFlowIndicator(transaction, transaction.from)}
+                  </div>
                 </div>
 
                 <div className="p-4 bg-primary/5 rounded-lg">

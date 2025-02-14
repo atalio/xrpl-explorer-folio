@@ -1,7 +1,10 @@
+
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { validateXRPLAddress } from "../services/xrpl";
 import { toast } from "sonner";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 const Index = () => {
   const [address, setAddress] = useState("");
@@ -9,6 +12,11 @@ const Index = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!address) {
+      toast.error("Please enter an XRPL address");
+      return;
+    }
+    
     if (validateXRPLAddress(address)) {
       navigate(`/dashboard/${address}`);
     } else {
@@ -32,23 +40,24 @@ const Index = () => {
             <label htmlFor="address" className="block text-sm font-medium text-secondary mb-2">
               XRPL Address
             </label>
-            <input
+            <Input
               id="address"
               type="text"
               value={address}
               onChange={(e) => setAddress(e.target.value)}
-              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+              className="font-mono"
               placeholder="Enter your XRPL address"
             />
           </div>
           
-          <button
-            type="submit"
-            className="w-full bg-primary text-white py-3 rounded-lg hover:bg-primary/90 transition-colors font-medium"
-          >
+          <Button type="submit" className="w-full">
             View Transactions
-          </button>
+          </Button>
         </form>
+
+        <div className="mt-4 text-sm text-center text-gray-600">
+          Example: rsuUjfWxrACCAwGQDsNeZUhpzXf1n1NK5Z
+        </div>
       </div>
     </div>
   );
