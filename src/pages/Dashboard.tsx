@@ -1,13 +1,34 @@
+
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { fetchTransactions, fetchBalance, type Transaction } from "../services/xrpl";
 import { toast } from "sonner";
+import QRCode from "qrcode";
+import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
+import { useNavigate } from "react-router-dom";
 
 const Dashboard = () => {
   const { address } = useParams<{ address: string }>();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [balance, setBalance] = useState<string>("0");
   const [loading, setLoading] = useState(true);
+  const [qrCode, setQrCode] = useState<string>("");
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (address) {
+      QRCode.toDataURL(address, {
+        width: 200,
+        margin: 2,
+        color: {
+          dark: '#1A1F2C',
+          light: '#FFFFFF',
+        },
+      })
+        .then(url => setQrCode(url))
+        .catch(err => console.error("QR Code generation failed:", err));
+    }
+  }, [address]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -30,6 +51,10 @@ const Dashboard = () => {
     loadData();
   }, [address]);
 
+  const handleAddressClick = (clickedAddress: string) => {
+    navigate(`/dashboard/${clickedAddress}`);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -41,9 +66,21 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/5 to-secondary/5 p-4 sm:p-8">
       <div className="max-w-7xl mx-auto">
+        <Breadcrumb className="mb-6">
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink as={Link} to="/">Home</BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbLink>Dashboard</BreadcrumbLink>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
           <h1 className="text-2xl font-bold text-secondary mb-4">Account Overview</h1>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="p-4 bg-primary/10 rounded-lg">
               <p className="text-sm text-gray-600">Address</p>
               <p className="font-mono text-sm break-all">{address}</p>
@@ -51,6 +88,15 @@ const Dashboard = () => {
             <div className="p-4 bg-primary/10 rounded-lg">
               <p className="text-sm text-gray-600">Balance</p>
               <p className="font-bold text-xl">{balance} XRP</p>
+            </div>
+            <div className="p-4 bg-primary/10 rounded-lg flex justify-center items-center">
+              {qrCode && (
+                <img 
+                  src={qrCode} 
+                  alt="XRPL Address QR Code" 
+                  className="max-w-[120px] rounded-lg shadow-sm"
+                />
+              )}
             </div>
           </div>
         </div>
@@ -72,10 +118,24 @@ const Dashboard = () => {
               <tbody>
                 {transactions.map((tx) => (
                   <tr key={tx.hash} className="border-b hover:bg-gray-50">
-                    <td className="p-4">{tx.type}</td>
-                    <td className="p-4 font-mono text-sm">{tx.hash.substring(0, 8)}...</td>
+                    <td className="p-4 flex items-center gap-2">
+                      {tx.type}
+                      {tx.sourceTag === "29202152" && (
+                        <span className="bg-primary/10 text-primary text-xs px-2 py-1 rounded-full">
+                          BitBob
+                        </span>
+                      )}
+                    </td>
+                    <td className="p-4">
+                      <Link 
+                        to={`/transaction/${tx.hash}`}
+                        className="font-mono text-sm text-primary hover:underline"
+                      >
+                        {tx.hash.substring(0, 8)}...
+                      </Link>
+                    </td>
                     <td className="p-4">{tx.date}</td>
-                    <td className="p-4">{tx.amount} XRP</td>
+                    <td className="p-4">{tx.amount}</td>
                     <td className="p-4">{tx.fee}</td>
                     <td className="p-4">
                       <span className={`px-2 py-1 rounded-full text-xs ${

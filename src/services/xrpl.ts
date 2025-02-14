@@ -1,3 +1,4 @@
+
 import { toast } from "sonner";
 
 export interface Transaction {
@@ -7,6 +8,7 @@ export interface Transaction {
   amount: string;
   fee: string;
   status: string;
+  sourceTag?: string;
 }
 
 // Define endpoints for XRPL data
@@ -77,7 +79,8 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
           date: new Date(((transaction.date || 0) + 946684800) * 1000).toLocaleString(),
           amount: `${amountInXRP.toFixed(6)} XRP`,
           fee: (parseInt(transaction.Fee || '0') / 1_000_000).toFixed(6),
-          status: meta?.TransactionResult || 'unknown'
+          status: meta?.TransactionResult || 'unknown',
+          sourceTag: transaction.SourceTag?.toString()
         };
       });
     } catch (error) {
