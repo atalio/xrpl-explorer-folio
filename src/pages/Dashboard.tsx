@@ -71,7 +71,7 @@ const Dashboard = () => {
   };
 
   const getMoneyFlowIndicator = (tx: Transaction, currentAddress?: string) => {
-    if (!currentAddress) return null;
+    if (!currentAddress || !tx.from) return null;
     
     const isOutgoing = tx.from.toLowerCase() === currentAddress.toLowerCase();
     
@@ -182,37 +182,41 @@ const Dashboard = () => {
                         to={`/transaction/${tx.hash}`}
                         className="font-mono text-sm text-primary hover:underline"
                       >
-                        {tx.hash.substring(0, 8)}...
+                        {tx.hash ? tx.hash.substring(0, 8) + '...' : 'Unknown'}
                       </Link>
                     </td>
                     <td className="p-4">
-                      <button
-                        onClick={() => handleAddressClick(tx.from)}
-                        className="font-mono text-sm text-primary hover:underline"
-                      >
-                        {tx.from.substring(0, 8)}...
-                      </button>
+                      {tx.from && (
+                        <button
+                          onClick={() => handleAddressClick(tx.from)}
+                          className="font-mono text-sm text-primary hover:underline"
+                        >
+                          {tx.from.substring(0, 8)}...
+                        </button>
+                      )}
                     </td>
                     <td className="p-4">
-                      <button
-                        onClick={() => handleAddressClick(tx.to)}
-                        className="font-mono text-sm text-primary hover:underline"
-                      >
-                        {tx.to.substring(0, 8)}...
-                      </button>
+                      {tx.to && (
+                        <button
+                          onClick={() => handleAddressClick(tx.to)}
+                          className="font-mono text-sm text-primary hover:underline"
+                        >
+                          {tx.to.substring(0, 8)}...
+                        </button>
+                      )}
                     </td>
-                    <td className="p-4">{tx.date}</td>
+                    <td className="p-4">{tx.date || 'Unknown'}</td>
                     <td className="p-4">
                       {getMoneyFlowIndicator(tx, address)}
                     </td>
-                    <td className="p-4">{tx.fee}</td>
+                    <td className="p-4">{tx.fee || '0'}</td>
                     <td className="p-4">
                       <span className={`px-2 py-1 rounded-full text-xs ${
                         tx.status === 'success' ? 'bg-green-100 text-green-800' : 
                         tx.status === 'failed' ? 'bg-red-100 text-red-800' : 
                         'bg-gray-100 text-gray-800'
                       }`}>
-                        {tx.status}
+                        {tx.status || 'unknown'}
                       </span>
                     </td>
                   </tr>

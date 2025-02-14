@@ -19,17 +19,15 @@ export interface TransactionDetail extends Transaction {
   flags: number;
   lastLedgerSequence?: number;
   ticketSequence?: number;
-  raw: any; // For any additional fields
+  raw: any;
 }
 
-// Define endpoints for XRPL data
+// Update endpoints to use CORS-friendly ones
 const XRPL_ENDPOINTS = [
-  "https://s1.ripple.com:51234/",           // Main Ripple server
-  "https://s2.ripple.com:51234/",           // Ripple backup server
-  "https://xrplcluster.com/",               // XRPL Cluster
-  "https://xrpl.ws/",                       // XRPL WebSocket Project
-  "https://testnet.xrpl-labs.com/",         // XRPL Labs Testnet
-  "https://xrpl.link/"                      // Community Node
+  "https://xrplcluster.com/",
+  "https://xrpl.ws/",
+  "https://testnet.xrpl-labs.com/",
+  "https://xrpl.link/"
 ];
 
 export const validateXRPLAddress = (address: string): boolean => {
@@ -37,31 +35,41 @@ export const validateXRPLAddress = (address: string): boolean => {
 };
 
 const fetchFromEndpoint = async (endpoint: string, address: string): Promise<any> => {
-  const params = {
-    method: "account_tx",
-    params: [{
-      account: address,
-      ledger_index_min: -1,
-      ledger_index_max: -1,
-      binary: false,
-      limit: 30,
-      forward: false
-    }]
-  };
+  try {
+    const params = {
+      method: "account_tx",
+      params: [{
+        account: address,
+        ledger_index_min: -1,
+        ledger_index_max: -1,
+        binary: false,
+        limit: 30,
+        forward: false
+      }]
+    };
 
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(params)
-  });
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(params)
+    });
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch from ${endpoint}`);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (data.result && data.result.status === "error") {
+      throw new Error(data.result.error_message || "Unknown error");
+    }
+
+    return data;
+  } catch (error) {
+    console.error(`Error fetching from ${endpoint}:`, error);
+    throw error;
   }
-
-  return response.json();
 };
 
 export const fetchTransactionDetails = async (hash: string): Promise<TransactionDetail | null> => {
@@ -91,17 +99,17 @@ export const fetchTransactionDetails = async (hash: string): Promise<Transaction
         const amountInXRP = amountInDrops / 1_000_000;
 
         return {
-          hash: tx.hash,
+          hash: tx.hash || hash,
           type: tx.TransactionType || 'Unknown',
           date: new Date(((tx.date || 0) + 946684800) * 1000).toLocaleString(),
           amount: `${amountInXRP.toFixed(6)} XRP`,
           fee: (parseInt(tx.Fee || '0') / 1_000_000).toFixed(6),
           status: tx.meta?.TransactionResult || 'unknown',
           sourceTag: tx.SourceTag?.toString(),
-          from: tx.Account,
-          to: tx.Destination,
-          sequence: tx.Sequence,
-          flags: tx.Flags,
+          from: tx.Account || 'Unknown',
+          to: tx.Destination || 'Unknown',
+          sequence: tx.Sequence || 0,
+          flags: tx.Flags || 0,
           lastLedgerSequence: tx.LastLedgerSequence,
           ticketSequence: tx.TicketSequence,
           memos: tx.Memos?.map((memo: any) => memo.Memo.MemoData) || [],
@@ -134,21 +142,21 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
       }
 
       return data.result.transactions.map((tx: any) => {
-        const transaction = tx.tx;
-        const meta = tx.meta;
+        const transaction = tx.tx || {};
+        const meta = tx.meta || {};
         const amountInDrops = parseFloat(transaction.Amount || '0');
         const amountInXRP = amountInDrops / 1_000_000;
 
         return {
-          hash: transaction.hash,
+          hash: transaction.hash || 'Unknown',
           type: transaction.TransactionType || 'Unknown',
           date: new Date(((transaction.date || 0) + 946684800) * 1000).toLocaleString(),
           amount: `${amountInXRP.toFixed(6)} XRP`,
           fee: (parseInt(transaction.Fee || '0') / 1_000_000).toFixed(6),
-          status: meta?.TransactionResult || 'unknown',
+          status: meta.TransactionResult || 'unknown',
           sourceTag: transaction.SourceTag?.toString(),
-          from: transaction.Account,
-          to: transaction.Destination
+          from: transaction.Account || 'Unknown',
+          to: transaction.Destination || 'Unknown'
         };
       });
     } catch (error) {
