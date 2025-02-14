@@ -24,6 +24,7 @@ export interface TransactionDetail extends Transaction {
   raw: any;
 }
 
+// Primary and backup servers
 const XRPL_SERVERS = [
   "wss://xrplcluster.com",
   "wss://s1.ripple.com",
@@ -39,6 +40,7 @@ const getClient = async (): Promise<Client> => {
     try {
       const client = new Client(server);
       await client.connect();
+      console.log(`Connected to ${server}`);
       return client;
     } catch (error) {
       console.error(`Failed to connect to ${server}:`, error);
@@ -48,26 +50,46 @@ const getClient = async (): Promise<Client> => {
   throw new Error("Could not connect to any XRPL server");
 };
 
+// Helper function to format XRP amount
+const formatXRPAmount = (amount: string | number | undefined): string => {
+  if (!amount) return '0.000000 XRP';
+  const amountInDrops = typeof amount === 'string' ? parseFloat(amount) : amount;
+  return `${(amountInDrops / 1_000_000).toFixed(6)} XRP`;
+};
+
+// Helper function to format date
+const formatXRPLDate = (rippleEpochDate: number | undefined): string => {
+  if (!rippleEpochDate) return 'Unknown';
+  try {
+    // XRPL epoch starts at January 1, 2000 (946684800 seconds after Unix epoch)
+    const unixTimestamp = (rippleEpochDate + 946684800) * 1000;
+    return new Date(unixTimestamp).toLocaleString();
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return 'Invalid Date';
+  }
+};
+
 export const fetchTransactionDetails = async (hash: string): Promise<TransactionDetail | null> => {
   let client: Client | null = null;
   try {
     client = await getClient();
     const tx = await client.request({
       command: "tx",
-      transaction: hash
+      transaction: hash,
+      binary: false
     });
 
     if (tx.result) {
-      const txData = tx.result as any;
-      const amountInDrops = parseFloat(txData.Amount?.toString() || '0');
-      const amountInXRP = amountInDrops / 1_000_000;
+      const txData = tx.result;
+      console.log('Transaction details:', txData);
 
-      return {
+      const transactionDetail: TransactionDetail = {
         hash: txData.hash || hash,
         type: txData.TransactionType || 'Unknown',
-        date: new Date(((txData.date || 0) + 946684800) * 1000).toLocaleString(),
-        amount: `${amountInXRP.toFixed(6)} XRP`,
-        fee: (parseInt(txData.Fee?.toString() || '0') / 1_000_000).toFixed(6),
+        date: formatXRPLDate(txData.date),
+        amount: formatXRPAmount(txData.Amount),
+        fee: formatXRPAmount(txData.Fee),
         status: txData.meta?.TransactionResult || 'unknown',
         sourceTag: txData.SourceTag?.toString(),
         from: txData.Account || 'Unknown',
@@ -76,13 +98,21 @@ export const fetchTransactionDetails = async (hash: string): Promise<Transaction
         flags: txData.Flags || 0,
         lastLedgerSequence: txData.LastLedgerSequence,
         ticketSequence: txData.TicketSequence,
-        memos: txData.Memos?.map((memo: any) => memo.Memo.MemoData) || [],
+        memos: txData.Memos?.map((memo: any) => 
+          memo.Memo?.MemoData ? 
+            Buffer.from(memo.Memo.MemoData, 'hex').toString('utf8') 
+          : ''
+        ).filter(Boolean) || [],
         raw: txData
       };
+
+      console.log('Processed transaction detail:', transactionDetail);
+      return transactionDetail;
     }
     return null;
   } catch (error) {
     console.error("Error fetching transaction details:", error);
+    toast.error("Failed to fetch transaction details");
     return null;
   } finally {
     if (client) {
@@ -95,6 +125,8 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
   let client: Client | null = null;
   try {
     client = await getClient();
+    console.log(`Fetching transactions for address: ${address}`);
+    
     const response = await client.request({
       command: "account_tx",
       account: address,
@@ -105,29 +137,48 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
       forward: false
     });
 
-    if (response.result && response.result.transactions) {
-      return response.result.transactions.map((tx: any) => {
-        const transaction = tx.tx || {};
-        const meta = tx.meta || {};
-        const amountInDrops = parseFloat(transaction.Amount?.toString() || '0');
-        const amountInXRP = amountInDrops / 1_000_000;
-
-        return {
-          hash: transaction.hash || 'Unknown',
-          type: transaction.TransactionType || 'Unknown',
-          date: new Date(((transaction.date || 0) + 946684800) * 1000).toLocaleString(),
-          amount: `${amountInXRP.toFixed(6)} XRP`,
-          fee: (parseInt(transaction.Fee?.toString() || '0') / 1_000_000).toFixed(6),
-          status: meta.TransactionResult || 'unknown',
-          sourceTag: transaction.SourceTag?.toString(),
-          from: transaction.Account || 'Unknown',
-          to: transaction.Destination || 'Unknown'
-        };
-      });
+    if (!response.result?.transactions) {
+      console.warn('No transactions found or invalid response');
+      return [];
     }
-    return [];
+
+    console.log('Raw transactions:', response.result.transactions);
+
+    const transactions = response.result.transactions.map((tx: any) => {
+      const transaction = tx.tx || {};
+      const meta = tx.meta || {};
+
+      // Handle different amount formats
+      let amount = '0';
+      if (transaction.Amount) {
+        if (typeof transaction.Amount === 'object' && transaction.Amount.value) {
+          amount = transaction.Amount.value;
+        } else {
+          amount = transaction.Amount.toString();
+        }
+      }
+
+      const parsedTx: Transaction = {
+        hash: transaction.hash || 'Unknown',
+        type: transaction.TransactionType || 'Unknown',
+        date: formatXRPLDate(transaction.date),
+        amount: formatXRPAmount(amount),
+        fee: formatXRPAmount(transaction.Fee),
+        status: meta.TransactionResult || 'unknown',
+        sourceTag: transaction.SourceTag?.toString(),
+        from: transaction.Account || 'Unknown',
+        to: transaction.Destination || 'Unknown'
+      };
+
+      console.log('Processed transaction:', parsedTx);
+      return parsedTx;
+    });
+
+    console.log(`Processed ${transactions.length} transactions`);
+    return transactions;
   } catch (error) {
     console.error("Error fetching transactions:", error);
+    toast.error("Failed to fetch transactions");
     return [];
   } finally {
     if (client) {
@@ -140,20 +191,27 @@ export const fetchBalance = async (address: string): Promise<string> => {
   let client: Client | null = null;
   try {
     client = await getClient();
+    console.log(`Fetching balance for address: ${address}`);
+
     const response = await client.request({
       command: "account_info",
       account: address,
       ledger_index: "validated"
     });
 
-    if (response.result && response.result.account_data) {
-      const balanceInDrops = parseInt(response.result.account_data.Balance || '0');
-      return (balanceInDrops / 1_000_000).toFixed(6);
+    if (response.result?.account_data) {
+      const balanceInDrops = response.result.account_data.Balance;
+      const formattedBalance = formatXRPAmount(balanceInDrops);
+      console.log(`Balance for ${address}:`, formattedBalance);
+      return formattedBalance;
     }
-    return '0';
+
+    console.warn('No balance data found');
+    return '0.000000 XRP';
   } catch (error) {
     console.error("Error fetching balance:", error);
-    return '0';
+    toast.error("Failed to fetch balance");
+    return '0.000000 XRP';
   } finally {
     if (client) {
       await client.disconnect();
