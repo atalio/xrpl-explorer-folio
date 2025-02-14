@@ -69,11 +69,11 @@ const Dashboard = () => {
         <Breadcrumb className="mb-6">
           <BreadcrumbList>
             <BreadcrumbItem>
-              <BreadcrumbLink as={Link} to="/">Home</BreadcrumbLink>
+              <Link to="/" className="text-primary hover:text-primary/90">Home</Link>
             </BreadcrumbItem>
             <BreadcrumbSeparator />
             <BreadcrumbItem>
-              <BreadcrumbLink>Dashboard</BreadcrumbLink>
+              <span>Dashboard</span>
             </BreadcrumbItem>
           </BreadcrumbList>
         </Breadcrumb>
