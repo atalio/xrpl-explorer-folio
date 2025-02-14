@@ -1,4 +1,5 @@
 
+import { Client, validate } from 'xrpl';
 import { toast } from "sonner";
 
 export interface Transaction {
@@ -22,132 +23,92 @@ export interface TransactionDetail extends Transaction {
   raw: any;
 }
 
-// Update endpoints to use more reliable, CORS-friendly ones
-const XRPL_ENDPOINTS = [
-  "https://xrplcluster.com",
-  "https://xrpl.xrpl.org",
-  "https://mainnet.xrpl.org"
-].map(url => url.endsWith('/') ? url : `${url}/`);
+const XRPL_SERVERS = [
+  "wss://xrplcluster.com",
+  "wss://s1.ripple.com",
+  "wss://s2.ripple.com"
+];
 
 export const validateXRPLAddress = (address: string): boolean => {
-  return address.startsWith('r') && address.length >= 25 && address.length <= 35;
+  return validate.isValidClassicAddress(address);
 };
 
-const fetchFromEndpoint = async (endpoint: string, address: string): Promise<any> => {
-  try {
-    console.log(`Attempting to fetch from ${endpoint}`);
-    
-    const params = {
-      method: "account_tx",
-      params: [{
-        account: address,
-        ledger_index_min: -1,
-        ledger_index_max: -1,
-        binary: false,
-        limit: 30,
-        forward: false
-      }]
-    };
-
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
-      },
-      mode: 'cors',
-      body: JSON.stringify(params)
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
-    if (data.result && data.result.status === "error") {
-      throw new Error(data.result.error_message || "Unknown error");
-    }
-
-    return data;
-  } catch (error) {
-    console.error(`Error fetching from ${endpoint}:`, error);
-    throw error;
-  }
-};
-
-export const fetchTransactionDetails = async (hash: string): Promise<TransactionDetail | null> => {
-  let lastError = null;
-
-  for (const endpoint of XRPL_ENDPOINTS) {
+const getClient = async (): Promise<Client> => {
+  for (const server of XRPL_SERVERS) {
     try {
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*'
-        },
-        mode: 'cors',
-        body: JSON.stringify({
-          method: "tx",
-          params: [{ transaction: hash }]
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      if (data.result && data.result) {
-        const tx = data.result;
-        const amountInDrops = parseFloat(tx.Amount || '0');
-        const amountInXRP = amountInDrops / 1_000_000;
-
-        return {
-          hash: tx.hash || hash,
-          type: tx.TransactionType || 'Unknown',
-          date: new Date(((tx.date || 0) + 946684800) * 1000).toLocaleString(),
-          amount: `${amountInXRP.toFixed(6)} XRP`,
-          fee: (parseInt(tx.Fee || '0') / 1_000_000).toFixed(6),
-          status: tx.meta?.TransactionResult || 'unknown',
-          sourceTag: tx.SourceTag?.toString(),
-          from: tx.Account || 'Unknown',
-          to: tx.Destination || 'Unknown',
-          sequence: tx.Sequence || 0,
-          flags: tx.Flags || 0,
-          lastLedgerSequence: tx.LastLedgerSequence,
-          ticketSequence: tx.TicketSequence,
-          memos: tx.Memos?.map((memo: any) => memo.Memo.MemoData) || [],
-          raw: tx
-        };
-      }
+      const client = new Client(server);
+      await client.connect();
+      return client;
     } catch (error) {
-      console.error(`Error fetching from ${endpoint}:`, error);
-      lastError = error;
+      console.error(`Failed to connect to ${server}:`, error);
       continue;
     }
   }
+  throw new Error("Could not connect to any XRPL server");
+};
 
-  console.error("All endpoints failed:", lastError);
-  return null;
+export const fetchTransactionDetails = async (hash: string): Promise<TransactionDetail | null> => {
+  let client: Client | null = null;
+  try {
+    client = await getClient();
+    const tx = await client.request({
+      command: "tx",
+      transaction: hash
+    });
+
+    if (tx.result) {
+      const txData = tx.result;
+      const amountInDrops = parseFloat(txData.Amount?.toString() || '0');
+      const amountInXRP = amountInDrops / 1_000_000;
+
+      return {
+        hash: txData.hash || hash,
+        type: txData.TransactionType || 'Unknown',
+        date: new Date(((txData.date || 0) + 946684800) * 1000).toLocaleString(),
+        amount: `${amountInXRP.toFixed(6)} XRP`,
+        fee: (parseInt(txData.Fee?.toString() || '0') / 1_000_000).toFixed(6),
+        status: txData.meta?.TransactionResult || 'unknown',
+        sourceTag: txData.SourceTag?.toString(),
+        from: txData.Account || 'Unknown',
+        to: txData.Destination || 'Unknown',
+        sequence: txData.Sequence || 0,
+        flags: txData.Flags || 0,
+        lastLedgerSequence: txData.LastLedgerSequence,
+        ticketSequence: txData.TicketSequence,
+        memos: txData.Memos?.map((memo: any) => memo.Memo.MemoData) || [],
+        raw: txData
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error("Error fetching transaction details:", error);
+    return null;
+  } finally {
+    if (client) {
+      await client.disconnect();
+    }
+  }
 };
 
 export const fetchTransactions = async (address: string): Promise<Transaction[]> => {
-  let lastError = null;
+  let client: Client | null = null;
+  try {
+    client = await getClient();
+    const response = await client.request({
+      command: "account_tx",
+      account: address,
+      ledger_index_min: -1,
+      ledger_index_max: -1,
+      binary: false,
+      limit: 30,
+      forward: false
+    });
 
-  for (const endpoint of XRPL_ENDPOINTS) {
-    try {
-      const data = await fetchFromEndpoint(endpoint, address);
-      
-      if (!data.result || !data.result.transactions) {
-        console.warn(`Invalid response from ${endpoint}`);
-        continue;
-      }
-
-      return data.result.transactions.map((tx: any) => {
+    if (response.result && response.result.transactions) {
+      return response.result.transactions.map((tx: any) => {
         const transaction = tx.tx || {};
         const meta = tx.meta || {};
-        const amountInDrops = parseFloat(transaction.Amount || '0');
+        const amountInDrops = parseFloat(transaction.Amount?.toString() || '0');
         const amountInXRP = amountInDrops / 1_000_000;
 
         return {
@@ -155,63 +116,46 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
           type: transaction.TransactionType || 'Unknown',
           date: new Date(((transaction.date || 0) + 946684800) * 1000).toLocaleString(),
           amount: `${amountInXRP.toFixed(6)} XRP`,
-          fee: (parseInt(transaction.Fee || '0') / 1_000_000).toFixed(6),
+          fee: (parseInt(transaction.Fee?.toString() || '0') / 1_000_000).toFixed(6),
           status: meta.TransactionResult || 'unknown',
           sourceTag: transaction.SourceTag?.toString(),
           from: transaction.Account || 'Unknown',
           to: transaction.Destination || 'Unknown'
         };
       });
-    } catch (error) {
-      console.error(`Error fetching from ${endpoint}:`, error);
-      lastError = error;
-      continue;
+    }
+    return [];
+  } catch (error) {
+    console.error("Error fetching transactions:", error);
+    return [];
+  } finally {
+    if (client) {
+      await client.disconnect();
     }
   }
-
-  console.error("All endpoints failed:", lastError);
-  return [];
 };
 
 export const fetchBalance = async (address: string): Promise<string> => {
-  let lastError = null;
+  let client: Client | null = null;
+  try {
+    client = await getClient();
+    const response = await client.request({
+      command: "account_info",
+      account: address,
+      ledger_index: "validated"
+    });
 
-  for (const endpoint of XRPL_ENDPOINTS) {
-    try {
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*'
-        },
-        mode: 'cors',
-        body: JSON.stringify({
-          method: "account_info",
-          params: [{
-            account: address,
-            strict: true,
-            ledger_index: "current",
-            queue: true
-          }]
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      if (data.result && data.result.account_data) {
-        const balanceInDrops = parseInt(data.result.account_data.Balance || '0');
-        return (balanceInDrops / 1_000_000).toFixed(6);
-      }
-    } catch (error) {
-      console.error(`Error fetching balance from ${endpoint}:`, error);
-      lastError = error;
-      continue;
+    if (response.result && response.result.account_data) {
+      const balanceInDrops = parseInt(response.result.account_data.Balance || '0');
+      return (balanceInDrops / 1_000_000).toFixed(6);
+    }
+    return '0';
+  } catch (error) {
+    console.error("Error fetching balance:", error);
+    return '0';
+  } finally {
+    if (client) {
+      await client.disconnect();
     }
   }
-
-  console.error("All balance endpoints failed:", lastError);
-  return '0';
 };
