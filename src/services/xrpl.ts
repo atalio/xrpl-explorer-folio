@@ -91,19 +91,19 @@ export const fetchTransactionDetails = async (hash: string): Promise<Transaction
 
       const transactionDetail: TransactionDetail = {
         hash: hash,
-        type: txData.TransactionType || 'Unknown',
+        type: txData.tx_json?.TransactionType || 'Unknown',
         date: formatXRPLDate(txData.date),
-        amount: formatXRPAmount(txData.Amount),
-        fee: formatXRPAmount(txData.Fee),
+        amount: formatXRPAmount(txData.tx_json?.Amount),
+        fee: formatXRPAmount(txData.tx_json?.Fee),
         status: txData.meta?.TransactionResult || 'unknown',
-        sourceTag: txData.SourceTag?.toString(),
-        from: txData.Account || 'Unknown',
-        to: txData.Destination || 'Unknown',
-        sequence: txData.Sequence || 0,
-        flags: txData.Flags || 0,
-        lastLedgerSequence: txData.LastLedgerSequence,
-        ticketSequence: txData.TicketSequence,
-        memos: txData.Memos?.map((memo: any) => 
+        sourceTag: txData.tx_json?.SourceTag?.toString(),
+        from: txData.tx_json?.Account || 'Unknown',
+        to: txData.tx_json?.Destination || 'Unknown',
+        sequence: txData.tx_json?.Sequence || 0,
+        flags: txData.tx_json?.Flags || 0,
+        lastLedgerSequence: txData.tx_json?.LastLedgerSequence,
+        ticketSequence: txData.tx_json?.TicketSequence,
+        memos: txData.tx_json?.Memos?.map((memo: any) => 
           memo.Memo?.MemoData ? 
             Buffer.from(memo.Memo.MemoData, 'hex').toString('utf8') 
           : ''
