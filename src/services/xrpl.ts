@@ -1,4 +1,3 @@
-
 import { Client, isValidClassicAddress } from 'xrpl';
 import { toast } from "sonner";
 import type { 
@@ -206,73 +205,122 @@ export const fetchTransactionDetails = async (hash: string): Promise<Transaction
 };
 
 export const fetchTransactions = async (address: string): Promise<Transaction[]> => {
-  let client: Client | null = null;
-  try {
-    client = await getClient();
-    console.log(`Fetching transactions for address: ${address}`);
-    
-    const response = await client.request({
-      command: "account_tx",
-      account: address,
-      ledger_index_min: -1,
-      ledger_index_max: -1,
-      binary: false,
-      limit: 30,
-      forward: false
-    }) as AccountTxResponse;
+  const servers = [...XRPL_SERVERS];
+  let transactions: Transaction[] = [];
+  let succeeded = false;
 
-    if (!response.result?.transactions) {
-      console.warn('No transactions found or invalid response');
-      return [];
-    }
+  for (let i = 0; i < servers.length && !succeeded; i++) {
+    let client: Client | null = null;
+    try {
+      client = new Client(servers[i]);
+      await client.connect();
+      console.log(`Connected to ${servers[i]} for transactions`);
+      
+      const response = await client.request({
+        command: "account_tx",
+        account: address,
+        ledger_index_min: -1,
+        ledger_index_max: -1,
+        binary: false,
+        limit: 30,
+        forward: false
+      }) as AccountTxResponse;
 
-    console.log('Raw transactions:', response.result.transactions);
+      if (!response.result?.transactions || !Array.isArray(response.result.transactions)) {
+        console.warn('No transactions found or invalid response format');
+        continue;
+      }
 
-    const transactions = response.result.transactions
-      .filter((tx): tx is AccountTxTransaction => Boolean(tx.tx && tx.meta))
-      .map(tx => {
-        const txData = tx.tx as any;
-        const meta = tx.meta as XRPLTransactionMeta;
+      console.log('Raw transactions:', response.result.transactions);
 
-        let amount = txData.Amount;
-        if (amount) {
-          if (typeof amount === 'object' && 'value' in amount) {
-            amount = amount.value;
+      transactions = response.result.transactions
+        .filter((tx): tx is AccountTxTransaction => {
+          if (!tx.tx || !tx.meta) {
+            console.warn('Skipping invalid transaction:', tx);
+            return false;
           }
-        }
+          return true;
+        })
+        .map(tx => {
+          const txData = tx.tx;
+          const meta = tx.meta as XRPLTransactionMeta;
 
-        const memoData = txData.Memos?.[0]?.Memo?.MemoData;
-        const memo = memoData ? hexToAscii(memoData) : undefined;
+          // Handle amount parsing
+          let amount = txData.Amount;
+          if (amount) {
+            if (typeof amount === 'object' && 'value' in amount) {
+              amount = amount.value;
+            }
+          }
 
-        const parsedTx: Transaction = {
-          hash: txData.hash,
-          type: txData.TransactionType || 'Unknown',
-          date: formatXRPLDate(txData.date),
-          amount: formatXRPAmount(amount),
-          fee: formatXRPAmount(txData.Fee),
-          status: meta.TransactionResult || 'unknown',
-          sourceTag: txData.SourceTag?.toString(),
-          from: txData.Account || 'Unknown',
-          to: txData.Destination || 'Unknown',
-          memo,
-          isBitbob: memo?.startsWith('BitBob') ?? false
-        };
+          // Parse memo data if present
+          let memo: string | undefined;
+          let isBitbob = false;
+          
+          if ('Memos' in txData && Array.isArray(txData.Memos) && txData.Memos.length > 0) {
+            const memoData = txData.Memos[0]?.Memo?.MemoData;
+            if (memoData) {
+              memo = hexToAscii(memoData);
+              isBitbob = memo.startsWith('BitBob');
+            }
+          }
 
-        console.log('Processed transaction:', parsedTx);
-        return parsedTx;
-      });
+          // Get proper transaction status
+          const status = meta.TransactionResult || 'unknown';
 
-    console.log(`Processed ${transactions.length} transactions`);
-    return transactions;
-  } catch (error) {
-    console.error("Error fetching transactions:", error);
-    toast.error("Failed to fetch transactions");
-    return [];
-  } finally {
-    if (client) {
-      await client.disconnect();
+          // Get proper date
+          const date = txData.date ? formatXRPLDate(txData.date) : 'Unknown';
+
+          // Format the transaction
+          const parsedTx: Transaction = {
+            hash: txData.hash || 'Unknown',
+            type: txData.TransactionType || 'Unknown',
+            date,
+            amount: formatXRPAmount(amount),
+            fee: formatXRPAmount(txData.Fee),
+            status,
+            sourceTag: txData.SourceTag?.toString(),
+            from: txData.Account || 'Unknown',
+            to: 'Destination' in txData ? txData.Destination as string : 'Unknown',
+            memo,
+            isBitbob
+          };
+
+          console.log('Processed transaction:', parsedTx);
+          return parsedTx;
+        })
+        .filter(tx => {
+          // Filter out transactions with invalid or missing critical data
+          const isValid = tx.hash !== 'Unknown' && 
+                         tx.from !== 'Unknown' && 
+                         tx.status !== 'unknown';
+          if (!isValid) {
+            console.warn('Filtering out invalid transaction:', tx);
+          }
+          return isValid;
+        });
+
+      if (transactions.length > 0) {
+        succeeded = true;
+        console.log(`Successfully fetched ${transactions.length} transactions from ${servers[i]}`);
+      }
+    } catch (error) {
+      console.error(`Error fetching transactions from ${servers[i]}:`, error);
+      continue;
+    } finally {
+      if (client) {
+        await client.disconnect();
+      }
     }
   }
+
+  if (!succeeded) {
+    toast.error("Failed to fetch transactions from all servers");
+    return [];
+  }
+
+  console.log(`Processed ${transactions.length} total transactions`);
+  return transactions;
 };
 
 export const fetchBalance = async (address: string): Promise<BalanceDetails> => {
