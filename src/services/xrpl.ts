@@ -11,8 +11,18 @@ import type {
   TransactionMetadata
 } from 'xrpl';
 
-interface XRPLTransactionMeta extends TransactionMetadata {
+interface XRPLTransactionMeta {
   TransactionResult: string;
+  AffectedNodes: Array<{
+    ModifiedNode?: {
+      FinalFields: {
+        Balance: string;
+        Flags: number;
+        OwnerCount: number;
+        Sequence: number;
+      };
+    };
+  }>;
 }
 
 interface XRPLTxResponse {
@@ -31,6 +41,13 @@ interface XRPLTxResponse {
     hash: string;
     date: number;
     ledger_index: number;
+    Memos?: Array<{
+      Memo: {
+        MemoData?: string;
+        MemoType?: string;
+        MemoFormat?: string;
+      };
+    }>;
   };
   meta: XRPLTransactionMeta;
   validated: boolean;
@@ -46,6 +63,8 @@ export interface Transaction {
   sourceTag?: string;
   from: string;
   to: string;
+  memo?: string;
+  isBitbob: boolean;
 }
 
 export interface TransactionDetail extends Transaction {
@@ -57,19 +76,34 @@ export interface TransactionDetail extends Transaction {
   raw: any;
 }
 
-// Primary and backup servers
+export interface BalanceDetails {
+  total: string;
+  available: string;
+  reserve: string;
+}
+
+// Primary and backup servers with randomization
 const XRPL_SERVERS = [
   "wss://xrplcluster.com",
   "wss://s1.ripple.com",
-  "wss://s2.ripple.com"
+  "wss://s2.ripple.com",
+  "wss://rippleitin.com",
+  "wss://xrpl.ws"
 ];
 
 export const validateXRPLAddress = (address: string): boolean => {
   return isValidClassicAddress(address);
 };
 
+const getRandomServer = () => {
+  const index = Math.floor(Math.random() * XRPL_SERVERS.length);
+  return XRPL_SERVERS[index];
+};
+
 const getClient = async (): Promise<Client> => {
-  for (const server of XRPL_SERVERS) {
+  const shuffledServers = [...XRPL_SERVERS].sort(() => Math.random() - 0.5);
+  
+  for (const server of shuffledServers) {
     try {
       const client = new Client(server);
       await client.connect();
@@ -83,7 +117,6 @@ const getClient = async (): Promise<Client> => {
   throw new Error("Could not connect to any XRPL server");
 };
 
-// Helper function to format XRP amount
 const formatXRPAmount = (amount: string | number | { value: string } | undefined): string => {
   if (!amount) return '0.000000 XRP';
   
@@ -97,17 +130,23 @@ const formatXRPAmount = (amount: string | number | { value: string } | undefined
   return `${(amountValue / 1_000_000).toFixed(6)} XRP`;
 };
 
-// Helper function to format date
 const formatXRPLDate = (rippleEpochDate: number | undefined): string => {
   if (!rippleEpochDate) return 'Unknown';
   try {
-    // XRPL epoch starts at January 1, 2000 (946684800 seconds after Unix epoch)
     const unixTimestamp = (rippleEpochDate + 946684800) * 1000;
     return new Date(unixTimestamp).toLocaleString();
   } catch (error) {
     console.error('Error formatting date:', error);
     return 'Invalid Date';
   }
+};
+
+const hexToAscii = (hex: string): string => {
+  let ascii = '';
+  for (let i = 0; i < hex.length; i += 2) {
+    ascii += String.fromCharCode(parseInt(hex.substr(i, 2), 16));
+  }
+  return ascii;
 };
 
 export const fetchTransactionDetails = async (hash: string): Promise<TransactionDetail | null> => {
@@ -128,6 +167,9 @@ export const fetchTransactionDetails = async (hash: string): Promise<Transaction
     console.log('Raw transaction details:', response.result);
     
     const txInfo = response.result;
+    const memoData = (txInfo as any).Memos?.[0]?.Memo?.MemoData;
+    const memo = memoData ? hexToAscii(memoData) : undefined;
+
     const transactionDetail: TransactionDetail = {
       hash: txInfo.hash,
       type: (txInfo as any).TransactionType || 'Unknown',
@@ -138,14 +180,14 @@ export const fetchTransactionDetails = async (hash: string): Promise<Transaction
       sourceTag: (txInfo as any).SourceTag?.toString(),
       from: (txInfo as any).Account || 'Unknown',
       to: (txInfo as any).Destination || 'Unknown',
+      memo,
+      isBitbob: memo?.startsWith('BitBob') ?? false,
       sequence: (txInfo as any).Sequence || 0,
       flags: Number((txInfo as any).Flags) || 0,
       lastLedgerSequence: (txInfo as any).LastLedgerSequence,
       ticketSequence: (txInfo as any).TicketSequence,
-      memos: ((txInfo as any).Memos || []).map((memo: any) => 
-        memo.Memo?.MemoData ? 
-          Buffer.from(memo.Memo.MemoData, 'hex').toString('utf8') 
-        : ''
+      memos: [(txInfo as any).Memos || []].map((memoObj: any) => 
+        memoObj.Memo?.MemoData ? hexToAscii(memoObj.Memo.MemoData) : ''
       ).filter(Boolean),
       raw: txInfo
     };
@@ -189,9 +231,9 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
     const transactions = response.result.transactions
       .filter((tx): tx is AccountTxTransaction => Boolean(tx.tx && tx.meta))
       .map(tx => {
-        const txData = tx.tx;
+        const txData = tx.tx as any;
+        const meta = tx.meta as XRPLTransactionMeta;
 
-        // Handle different amount formats
         let amount = txData.Amount;
         if (amount) {
           if (typeof amount === 'object' && 'value' in amount) {
@@ -199,16 +241,21 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
           }
         }
 
+        const memoData = txData.Memos?.[0]?.Memo?.MemoData;
+        const memo = memoData ? hexToAscii(memoData) : undefined;
+
         const parsedTx: Transaction = {
           hash: txData.hash,
           type: txData.TransactionType || 'Unknown',
           date: formatXRPLDate(txData.date),
           amount: formatXRPAmount(amount),
           fee: formatXRPAmount(txData.Fee),
-          status: (tx.meta as XRPLTransactionMeta).TransactionResult || 'unknown',
+          status: meta.TransactionResult || 'unknown',
           sourceTag: txData.SourceTag?.toString(),
           from: txData.Account || 'Unknown',
-          to: (txData as any).Destination || 'Unknown'
+          to: txData.Destination || 'Unknown',
+          memo,
+          isBitbob: memo?.startsWith('BitBob') ?? false
         };
 
         console.log('Processed transaction:', parsedTx);
@@ -228,7 +275,7 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
   }
 };
 
-export const fetchBalance = async (address: string): Promise<string> => {
+export const fetchBalance = async (address: string): Promise<BalanceDetails> => {
   let client: Client | null = null;
   try {
     client = await getClient();
@@ -240,19 +287,40 @@ export const fetchBalance = async (address: string): Promise<string> => {
       ledger_index: "validated"
     }) as AccountInfoResponse;
 
-    if (response.result?.account_data) {
-      const balanceInDrops = response.result.account_data.Balance;
-      const formattedBalance = formatXRPAmount(balanceInDrops);
-      console.log(`Balance for ${address}:`, formattedBalance);
-      return formattedBalance;
+    if (!response.result?.account_data) {
+      console.warn('No balance data found');
+      return {
+        total: '0.000000 XRP',
+        available: '0.000000 XRP',
+        reserve: '0.000000 XRP'
+      };
     }
 
-    console.warn('No balance data found');
-    return '0.000000 XRP';
+    const accountData = response.result.account_data;
+    const ownerCount = Number(accountData.OwnerCount || 0);
+    const baseReserve = 10; // Base reserve in XRP
+    const ownerReserve = 2; // Owner reserve in XRP per owned object
+    
+    const totalBalance = Number(accountData.Balance) / 1_000_000;
+    const reserveRequirement = baseReserve + (ownerCount * ownerReserve);
+    const availableBalance = Math.max(0, totalBalance - reserveRequirement);
+
+    const balanceDetails: BalanceDetails = {
+      total: `${totalBalance.toFixed(6)} XRP`,
+      available: `${availableBalance.toFixed(6)} XRP`,
+      reserve: `${reserveRequirement.toFixed(6)} XRP`
+    };
+
+    console.log(`Balance details for ${address}:`, balanceDetails);
+    return balanceDetails;
   } catch (error) {
     console.error("Error fetching balance:", error);
     toast.error("Failed to fetch balance");
-    return '0.000000 XRP';
+    return {
+      total: '0.000000 XRP',
+      available: '0.000000 XRP',
+      reserve: '0.000000 XRP'
+    };
   } finally {
     if (client) {
       await client.disconnect();
