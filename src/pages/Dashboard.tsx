@@ -1,6 +1,7 @@
+
 import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { fetchTransactions, fetchBalance, type Transaction, validateXRPLAddress } from "../services/xrpl";
+import { fetchTransactions, fetchBalance, type Transaction, type BalanceDetails, validateXRPLAddress } from "../services/xrpl";
 import { toast } from "sonner";
 import QRCode from "qrcode";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
@@ -10,7 +11,11 @@ import { Button } from "@/components/ui/button";
 const Dashboard = () => {
   const { address } = useParams<{ address: string }>();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [balance, setBalance] = useState<string>("0");
+  const [balance, setBalance] = useState<BalanceDetails>({
+    total: "0.000000 XRP",
+    available: "0.000000 XRP",
+    reserve: "0.000000 XRP"
+  });
   const [loading, setLoading] = useState(true);
   const [qrCode, setQrCode] = useState<string>("");
   const [searchAddress, setSearchAddress] = useState("");
@@ -119,14 +124,18 @@ const Dashboard = () => {
 
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
           <h1 className="text-2xl font-bold text-secondary mb-4">Account Overview</h1>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
             <div className="p-4 bg-primary/10 rounded-lg">
               <p className="text-sm text-gray-600">Address</p>
               <p className="font-mono text-sm break-all">{address}</p>
             </div>
             <div className="p-4 bg-primary/10 rounded-lg">
-              <p className="text-sm text-gray-600">Balance</p>
-              <p className="font-bold text-xl">{balance} XRP</p>
+              <p className="text-sm text-gray-600">Total Balance</p>
+              <p className="font-bold text-xl">{balance.total}</p>
+            </div>
+            <div className="p-4 bg-primary/10 rounded-lg">
+              <p className="text-sm text-gray-600">Available Balance</p>
+              <p className="font-bold text-xl">{balance.available}</p>
             </div>
             <div className="p-4 bg-primary/10 rounded-lg flex justify-center items-center">
               {qrCode && (
@@ -171,7 +180,7 @@ const Dashboard = () => {
                   <tr key={tx.hash} className="border-b hover:bg-gray-50">
                     <td className="p-4 flex items-center gap-2">
                       {tx.type}
-                      {tx.sourceTag === "29202152" && (
+                      {tx.isBitbob && (
                         <span className="bg-primary/10 text-primary text-xs px-2 py-1 rounded-full">
                           BitBob
                         </span>
@@ -212,7 +221,7 @@ const Dashboard = () => {
                     <td className="p-4">{tx.fee || '0'}</td>
                     <td className="p-4">
                       <span className={`px-2 py-1 rounded-full text-xs ${
-                        tx.status === 'success' ? 'bg-green-100 text-green-800' : 
+                        tx.status === 'tesSUCCESS' ? 'bg-green-100 text-green-800' : 
                         tx.status === 'failed' ? 'bg-red-100 text-red-800' : 
                         'bg-gray-100 text-gray-800'
                       }`}>
