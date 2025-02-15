@@ -1,7 +1,12 @@
 
 import { Client, isValidClassicAddress } from 'xrpl';
 import { toast } from "sonner";
-import type { Transaction as XrplTransaction } from 'xrpl';
+import type { 
+  Transaction as XRPLTransaction,
+  TxResponse,
+  AccountTxResponse,
+  AccountInfoResponse
+} from 'xrpl';
 
 export interface Transaction {
   hash: string;
@@ -78,27 +83,27 @@ export const fetchTransactionDetails = async (hash: string): Promise<Transaction
       command: "tx",
       transaction: hash,
       binary: false
-    });
+    }) as TxResponse;
 
     if (tx.result) {
-      const txData = tx.result;
+      const txData = tx.result as any;
       console.log('Transaction details:', txData);
 
       const transactionDetail: TransactionDetail = {
         hash: txData.hash || hash,
-        type: txData.TransactionType || 'Unknown',
+        type: txData.tx_json?.TransactionType || 'Unknown',
         date: formatXRPLDate(txData.date),
-        amount: formatXRPAmount(txData.Amount),
-        fee: formatXRPAmount(txData.Fee),
-        status: txData.meta?.TransactionResult || 'unknown',
-        sourceTag: txData.SourceTag?.toString(),
-        from: txData.Account || 'Unknown',
-        to: txData.Destination || 'Unknown',
-        sequence: txData.Sequence || 0,
-        flags: txData.Flags || 0,
-        lastLedgerSequence: txData.LastLedgerSequence,
-        ticketSequence: txData.TicketSequence,
-        memos: txData.Memos?.map((memo: any) => 
+        amount: formatXRPAmount(txData.tx_json?.Amount),
+        fee: formatXRPAmount(txData.tx_json?.Fee),
+        status: (txData.meta as any)?.TransactionResult || 'unknown',
+        sourceTag: txData.tx_json?.SourceTag?.toString(),
+        from: txData.tx_json?.Account || 'Unknown',
+        to: txData.tx_json?.Destination || 'Unknown',
+        sequence: txData.tx_json?.Sequence || 0,
+        flags: txData.tx_json?.Flags || 0,
+        lastLedgerSequence: txData.tx_json?.LastLedgerSequence,
+        ticketSequence: txData.tx_json?.TicketSequence,
+        memos: txData.tx_json?.Memos?.map((memo: any) => 
           memo.Memo?.MemoData ? 
             Buffer.from(memo.Memo.MemoData, 'hex').toString('utf8') 
           : ''
@@ -135,7 +140,7 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
       binary: false,
       limit: 30,
       forward: false
-    });
+    }) as AccountTxResponse;
 
     if (!response.result?.transactions) {
       console.warn('No transactions found or invalid response');
@@ -197,7 +202,7 @@ export const fetchBalance = async (address: string): Promise<string> => {
       command: "account_info",
       account: address,
       ledger_index: "validated"
-    });
+    }) as AccountInfoResponse;
 
     if (response.result?.account_data) {
       const balanceInDrops = response.result.account_data.Balance;
