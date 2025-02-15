@@ -5,7 +5,8 @@ import type {
   Transaction as XRPLTransaction,
   TxResponse,
   AccountTxResponse,
-  AccountInfoResponse
+  AccountInfoResponse,
+  Payment
 } from 'xrpl';
 
 export interface Transaction {
@@ -56,10 +57,17 @@ const getClient = async (): Promise<Client> => {
 };
 
 // Helper function to format XRP amount
-const formatXRPAmount = (amount: string | number | undefined): string => {
+const formatXRPAmount = (amount: string | number | { value: string } | undefined): string => {
   if (!amount) return '0.000000 XRP';
-  const amountInDrops = typeof amount === 'string' ? parseFloat(amount) : amount;
-  return `${(amountInDrops / 1_000_000).toFixed(6)} XRP`;
+  
+  let amountValue: number;
+  if (typeof amount === 'object' && 'value' in amount) {
+    amountValue = parseFloat(amount.value);
+  } else {
+    amountValue = typeof amount === 'string' ? parseFloat(amount) : amount;
+  }
+  
+  return `${(amountValue / 1_000_000).toFixed(6)} XRP`;
 };
 
 // Helper function to format date
@@ -79,42 +87,44 @@ export const fetchTransactionDetails = async (hash: string): Promise<Transaction
   let client: Client | null = null;
   try {
     client = await getClient();
-    const tx = await client.request({
+    const response = await client.request({
       command: "tx",
       transaction: hash,
       binary: false
     }) as TxResponse;
 
-    if (tx.result) {
-      const txData = tx.result;
-      console.log('Transaction details:', txData);
-
-      const transactionDetail: TransactionDetail = {
-        hash: hash,
-        type: txData.tx_json?.TransactionType || 'Unknown',
-        date: formatXRPLDate(txData.date),
-        amount: formatXRPAmount(txData.tx_json?.Amount),
-        fee: formatXRPAmount(txData.tx_json?.Fee),
-        status: txData.meta?.TransactionResult || 'unknown',
-        sourceTag: txData.tx_json?.SourceTag?.toString(),
-        from: txData.tx_json?.Account || 'Unknown',
-        to: txData.tx_json?.Destination || 'Unknown',
-        sequence: txData.tx_json?.Sequence || 0,
-        flags: txData.tx_json?.Flags || 0,
-        lastLedgerSequence: txData.tx_json?.LastLedgerSequence,
-        ticketSequence: txData.tx_json?.TicketSequence,
-        memos: txData.tx_json?.Memos?.map((memo: any) => 
-          memo.Memo?.MemoData ? 
-            Buffer.from(memo.Memo.MemoData, 'hex').toString('utf8') 
-          : ''
-        ).filter(Boolean) || [],
-        raw: txData
-      };
-
-      console.log('Processed transaction detail:', transactionDetail);
-      return transactionDetail;
+    if (!response.result) {
+      console.warn('No transaction details found');
+      return null;
     }
-    return null;
+
+    console.log('Raw transaction details:', response.result);
+    
+    const txInfo = response.result;
+    const transactionDetail: TransactionDetail = {
+      hash: txInfo.hash,
+      type: (txInfo as any).TransactionType || 'Unknown',
+      date: formatXRPLDate(txInfo.date),
+      amount: formatXRPAmount((txInfo as any).Amount),
+      fee: formatXRPAmount((txInfo as any).Fee),
+      status: (txInfo.meta as any)?.TransactionResult || 'unknown',
+      sourceTag: (txInfo as any).SourceTag?.toString(),
+      from: (txInfo as any).Account || 'Unknown',
+      to: (txInfo as any).Destination || 'Unknown',
+      sequence: (txInfo as any).Sequence || 0,
+      flags: Number((txInfo as any).Flags) || 0,
+      lastLedgerSequence: (txInfo as any).LastLedgerSequence,
+      ticketSequence: (txInfo as any).TicketSequence,
+      memos: ((txInfo as any).Memos || []).map((memo: any) => 
+        memo.Memo?.MemoData ? 
+          Buffer.from(memo.Memo.MemoData, 'hex').toString('utf8') 
+        : ''
+      ).filter(Boolean),
+      raw: txInfo
+    };
+
+    console.log('Processed transaction detail:', transactionDetail);
+    return transactionDetail;
   } catch (error) {
     console.error("Error fetching transaction details:", error);
     toast.error("Failed to fetch transaction details");
@@ -149,35 +159,35 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
 
     console.log('Raw transactions:', response.result.transactions);
 
-    const transactions = response.result.transactions.map((tx: any) => {
-      const transaction = tx.tx || {};
-      const meta = tx.meta || {};
+    const transactions = response.result.transactions
+      .filter(tx => tx.tx && tx.meta)
+      .map(tx => {
+        const transaction = tx.tx;
+        const meta = tx.meta;
 
-      // Handle different amount formats
-      let amount = '0';
-      if (transaction.Amount) {
-        if (typeof transaction.Amount === 'object' && transaction.Amount.value) {
-          amount = transaction.Amount.value;
-        } else {
-          amount = transaction.Amount.toString();
+        // Handle different amount formats
+        let amount = transaction.Amount;
+        if (amount) {
+          if (typeof amount === 'object' && 'value' in amount) {
+            amount = amount.value;
+          }
         }
-      }
 
-      const parsedTx: Transaction = {
-        hash: transaction.hash,
-        type: transaction.TransactionType,
-        date: formatXRPLDate(transaction.date),
-        amount: formatXRPAmount(amount),
-        fee: formatXRPAmount(transaction.Fee),
-        status: meta.TransactionResult || 'unknown',
-        sourceTag: transaction.SourceTag?.toString(),
-        from: transaction.Account,
-        to: transaction.Destination
-      };
+        const parsedTx: Transaction = {
+          hash: transaction.hash,
+          type: transaction.TransactionType || 'Unknown',
+          date: formatXRPLDate(transaction.date),
+          amount: formatXRPAmount(amount),
+          fee: formatXRPAmount(transaction.Fee),
+          status: (meta as any).TransactionResult || 'unknown',
+          sourceTag: transaction.SourceTag?.toString(),
+          from: transaction.Account || 'Unknown',
+          to: (transaction as any).Destination || 'Unknown'
+        };
 
-      console.log('Processed transaction:', parsedTx);
-      return parsedTx;
-    });
+        console.log('Processed transaction:', parsedTx);
+        return parsedTx;
+      });
 
     console.log(`Processed ${transactions.length} transactions`);
     return transactions;
