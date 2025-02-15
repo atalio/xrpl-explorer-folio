@@ -86,24 +86,24 @@ export const fetchTransactionDetails = async (hash: string): Promise<Transaction
     }) as TxResponse;
 
     if (tx.result) {
-      const txData = tx.result as any;
+      const txData = tx.result;
       console.log('Transaction details:', txData);
 
       const transactionDetail: TransactionDetail = {
-        hash: txData.hash || hash,
-        type: txData.tx_json?.TransactionType || 'Unknown',
+        hash: hash,
+        type: txData.TransactionType || 'Unknown',
         date: formatXRPLDate(txData.date),
-        amount: formatXRPAmount(txData.tx_json?.Amount),
-        fee: formatXRPAmount(txData.tx_json?.Fee),
-        status: (txData.meta as any)?.TransactionResult || 'unknown',
-        sourceTag: txData.tx_json?.SourceTag?.toString(),
-        from: txData.tx_json?.Account || 'Unknown',
-        to: txData.tx_json?.Destination || 'Unknown',
-        sequence: txData.tx_json?.Sequence || 0,
-        flags: txData.tx_json?.Flags || 0,
-        lastLedgerSequence: txData.tx_json?.LastLedgerSequence,
-        ticketSequence: txData.tx_json?.TicketSequence,
-        memos: txData.tx_json?.Memos?.map((memo: any) => 
+        amount: formatXRPAmount(txData.Amount),
+        fee: formatXRPAmount(txData.Fee),
+        status: txData.meta?.TransactionResult || 'unknown',
+        sourceTag: txData.SourceTag?.toString(),
+        from: txData.Account || 'Unknown',
+        to: txData.Destination || 'Unknown',
+        sequence: txData.Sequence || 0,
+        flags: txData.Flags || 0,
+        lastLedgerSequence: txData.LastLedgerSequence,
+        ticketSequence: txData.TicketSequence,
+        memos: txData.Memos?.map((memo: any) => 
           memo.Memo?.MemoData ? 
             Buffer.from(memo.Memo.MemoData, 'hex').toString('utf8') 
           : ''
@@ -164,15 +164,15 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
       }
 
       const parsedTx: Transaction = {
-        hash: transaction.hash || 'Unknown',
-        type: transaction.TransactionType || 'Unknown',
+        hash: transaction.hash,
+        type: transaction.TransactionType,
         date: formatXRPLDate(transaction.date),
         amount: formatXRPAmount(amount),
         fee: formatXRPAmount(transaction.Fee),
         status: meta.TransactionResult || 'unknown',
         sourceTag: transaction.SourceTag?.toString(),
-        from: transaction.Account || 'Unknown',
-        to: transaction.Destination || 'Unknown'
+        from: transaction.Account,
+        to: transaction.Destination
       };
 
       console.log('Processed transaction:', parsedTx);
