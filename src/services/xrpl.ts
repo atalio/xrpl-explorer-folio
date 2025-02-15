@@ -9,6 +9,30 @@ import type {
   Payment
 } from 'xrpl';
 
+interface XRPLTransactionResponse {
+  tx: {
+    Account: string;
+    Amount: string | { value: string };
+    Destination?: string;
+    Fee: string;
+    Flags: number;
+    LastLedgerSequence?: number;
+    Sequence: number;
+    SigningPubKey: string;
+    SourceTag?: number;
+    TransactionType: string;
+    TxnSignature: string;
+    hash: string;
+    date: number;
+  };
+  meta: {
+    TransactionIndex: number;
+    TransactionResult: string;
+    delivered_amount?: string;
+  };
+  validated: boolean;
+}
+
 export interface Transaction {
   hash: string;
   type: string;
@@ -160,10 +184,9 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
     console.log('Raw transactions:', response.result.transactions);
 
     const transactions = response.result.transactions
-      .filter(tx => tx.tx && tx.meta)
+      .filter((tx): tx is XRPLTransactionResponse => Boolean(tx.tx && tx.meta))
       .map(tx => {
-        const transaction = tx.tx;
-        const meta = tx.meta;
+        const { tx: transaction, meta } = tx;
 
         // Handle different amount formats
         let amount = transaction.Amount;
@@ -175,14 +198,14 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
 
         const parsedTx: Transaction = {
           hash: transaction.hash,
-          type: transaction.TransactionType || 'Unknown',
+          type: transaction.TransactionType,
           date: formatXRPLDate(transaction.date),
           amount: formatXRPAmount(amount),
           fee: formatXRPAmount(transaction.Fee),
-          status: (meta as any).TransactionResult || 'unknown',
+          status: meta.TransactionResult || 'unknown',
           sourceTag: transaction.SourceTag?.toString(),
-          from: transaction.Account || 'Unknown',
-          to: (transaction as any).Destination || 'Unknown'
+          from: transaction.Account,
+          to: transaction.Destination || 'Unknown'
         };
 
         console.log('Processed transaction:', parsedTx);
