@@ -5,11 +5,17 @@ import type {
   Transaction as XRPLTransaction,
   TxResponse,
   AccountTxResponse,
+  AccountTxTransaction,
   AccountInfoResponse,
-  Payment
+  Payment,
+  TransactionMetadata
 } from 'xrpl';
 
-interface XRPLTransactionResponse {
+interface XRPLTransactionMeta extends TransactionMetadata {
+  TransactionResult: string;
+}
+
+interface XRPLTxResponse {
   tx: {
     Account: string;
     Amount: string | { value: string };
@@ -24,12 +30,9 @@ interface XRPLTransactionResponse {
     TxnSignature: string;
     hash: string;
     date: number;
+    ledger_index: number;
   };
-  meta: {
-    TransactionIndex: number;
-    TransactionResult: string;
-    delivered_amount?: string;
-  };
+  meta: XRPLTransactionMeta;
   validated: boolean;
 }
 
@@ -184,12 +187,12 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
     console.log('Raw transactions:', response.result.transactions);
 
     const transactions = response.result.transactions
-      .filter((tx): tx is XRPLTransactionResponse => Boolean(tx.tx && tx.meta))
+      .filter((tx): tx is AccountTxTransaction => Boolean(tx.tx && tx.meta))
       .map(tx => {
-        const { tx: transaction, meta } = tx;
+        const txData = tx.tx;
 
         // Handle different amount formats
-        let amount = transaction.Amount;
+        let amount = txData.Amount;
         if (amount) {
           if (typeof amount === 'object' && 'value' in amount) {
             amount = amount.value;
@@ -197,15 +200,15 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
         }
 
         const parsedTx: Transaction = {
-          hash: transaction.hash,
-          type: transaction.TransactionType,
-          date: formatXRPLDate(transaction.date),
+          hash: txData.hash,
+          type: txData.TransactionType || 'Unknown',
+          date: formatXRPLDate(txData.date),
           amount: formatXRPAmount(amount),
-          fee: formatXRPAmount(transaction.Fee),
-          status: meta.TransactionResult || 'unknown',
-          sourceTag: transaction.SourceTag?.toString(),
-          from: transaction.Account,
-          to: transaction.Destination || 'Unknown'
+          fee: formatXRPAmount(txData.Fee),
+          status: (tx.meta as XRPLTransactionMeta).TransactionResult || 'unknown',
+          sourceTag: txData.SourceTag?.toString(),
+          from: txData.Account || 'Unknown',
+          to: (txData as any).Destination || 'Unknown'
         };
 
         console.log('Processed transaction:', parsedTx);
