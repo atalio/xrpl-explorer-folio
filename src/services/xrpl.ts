@@ -87,7 +87,8 @@ const XRPL_SERVERS = [
   "wss://s1.ripple.com",
   "wss://s2.ripple.com",
   "wss://rippleitin.com",
-  "wss://xrpl.ws"
+  "wss://xrpl.ws",
+  "wss://s.altnet.rippletest.net"
 ];
 
 export const validateXRPLAddress = (address: string): boolean => {
@@ -242,18 +243,21 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
           return true;
         })
         .map(tx => {
-          const txData = tx.tx;
-          const meta = tx.meta as XRPLTransactionMeta;
+          const txData = tx.tx as XRPLTransaction;
+          const meta = tx.meta as TransactionMetadata;
 
-          // Handle amount parsing
-          let amount = txData.Amount;
-          if (amount) {
-            if (typeof amount === 'object' && 'value' in amount) {
-              amount = amount.value;
+          // Parse amount safely
+          let amountStr = '0';
+          if ('Amount' in txData) {
+            const amount = txData.Amount;
+            if (typeof amount === 'string') {
+              amountStr = amount;
+            } else if (amount && typeof amount === 'object' && 'value' in amount) {
+              amountStr = amount.value;
             }
           }
 
-          // Parse memo data if present
+          // Parse memo data safely
           let memo: string | undefined;
           let isBitbob = false;
           
@@ -265,23 +269,17 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
             }
           }
 
-          // Get proper transaction status
-          const status = meta.TransactionResult || 'unknown';
-
-          // Get proper date
-          const date = txData.date ? formatXRPLDate(txData.date) : 'Unknown';
-
-          // Format the transaction
+          // Format the transaction with safe fallbacks
           const parsedTx: Transaction = {
-            hash: txData.hash || 'Unknown',
-            type: txData.TransactionType || 'Unknown',
-            date,
-            amount: formatXRPAmount(amount),
-            fee: formatXRPAmount(txData.Fee),
-            status,
-            sourceTag: txData.SourceTag?.toString(),
-            from: txData.Account || 'Unknown',
-            to: 'Destination' in txData ? txData.Destination as string : 'Unknown',
+            hash: ('hash' in txData && txData.hash) ? txData.hash : 'Unknown',
+            type: ('TransactionType' in txData) ? txData.TransactionType : 'Unknown',
+            date: ('date' in txData && txData.date) ? formatXRPLDate(txData.date) : 'Unknown',
+            amount: formatXRPAmount(amountStr),
+            fee: ('Fee' in txData) ? formatXRPAmount(txData.Fee) : '0 XRP',
+            status: (meta && 'TransactionResult' in meta) ? meta.TransactionResult : 'unknown',
+            sourceTag: ('SourceTag' in txData) ? txData.SourceTag?.toString() : undefined,
+            from: ('Account' in txData) ? txData.Account : 'Unknown',
+            to: ('Destination' in txData) ? txData.Destination as string : 'Unknown',
             memo,
             isBitbob
           };
@@ -290,7 +288,6 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
           return parsedTx;
         })
         .filter(tx => {
-          // Filter out transactions with invalid or missing critical data
           const isValid = tx.hash !== 'Unknown' && 
                          tx.from !== 'Unknown' && 
                          tx.status !== 'unknown';
@@ -303,9 +300,12 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
       if (transactions.length > 0) {
         succeeded = true;
         console.log(`Successfully fetched ${transactions.length} transactions from ${servers[i]}`);
+        break; // Exit the loop if we got valid transactions
       }
     } catch (error) {
       console.error(`Error fetching transactions from ${servers[i]}:`, error);
+      // Wait for 1 second before trying the next server to avoid rate limits
+      await new Promise(resolve => setTimeout(resolve, 1000));
       continue;
     } finally {
       if (client) {
