@@ -101,11 +101,11 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
         return true;
       })
       .map(tx => {
-        const txData = tx.tx;
+        const txData = tx.tx as unknown as Record<string, any>;
         const meta = tx.meta as TransactionMetadata;
 
         let amountStr = '0';
-        if ('Amount' in txData) {
+        if (txData.Amount) {
           const amount = txData.Amount;
           if (typeof amount === 'string') {
             amountStr = amount;
@@ -117,7 +117,7 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
         let memo: string | undefined;
         let isBitbob = false;
         
-        if ('Memos' in txData && Array.isArray(txData.Memos) && txData.Memos.length > 0) {
+        if (txData.Memos && Array.isArray(txData.Memos) && txData.Memos.length > 0) {
           const memoData = txData.Memos[0]?.Memo?.MemoData;
           if (memoData && typeof memoData === 'string') {
             memo = hexToAscii(memoData);
@@ -126,20 +126,20 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
         }
 
         // Access properties safely with type guards
-        const hashValue = 'hash' in txData && typeof txData.hash === 'string' ? txData.hash : 'Unknown';
-        const typeValue = 'TransactionType' in txData && typeof txData.TransactionType === 'string' ? txData.TransactionType : 'Unknown';
-        const dateValue = 'date' in txData && typeof txData.date === 'number' ? formatXRPLDate(txData.date) : 'Unknown';
+        const hashValue = txData.hash && typeof txData.hash === 'string' ? txData.hash : 'Unknown';
+        const typeValue = txData.TransactionType && typeof txData.TransactionType === 'string' ? txData.TransactionType : 'Unknown';
+        const dateValue = txData.date && typeof txData.date === 'number' ? formatXRPLDate(txData.date) : 'Unknown';
 
         const parsedTx: Transaction = {
           hash: hashValue,
           type: typeValue,
           date: dateValue,
           amount: formatXRPAmount(amountStr),
-          fee: ('Fee' in txData && txData.Fee) ? formatXRPAmount(txData.Fee) : '0 XRP',
+          fee: txData.Fee ? formatXRPAmount(txData.Fee) : '0 XRP',
           status: (meta && 'TransactionResult' in meta) ? meta.TransactionResult : 'unknown',
-          sourceTag: ('SourceTag' in txData) ? txData.SourceTag?.toString() : undefined,
-          from: ('Account' in txData && typeof txData.Account === 'string') ? txData.Account : 'Unknown',
-          to: ('Destination' in txData && typeof txData.Destination === 'string') ? txData.Destination : 'Unknown',
+          sourceTag: txData.SourceTag?.toString(),
+          from: txData.Account && typeof txData.Account === 'string' ? txData.Account : 'Unknown',
+          to: txData.Destination && typeof txData.Destination === 'string' ? txData.Destination : 'Unknown',
           memo,
           isBitbob
         };
