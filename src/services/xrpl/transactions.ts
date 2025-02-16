@@ -101,7 +101,7 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
         return true;
       })
       .map(tx => {
-        const txData = tx.tx as XRPLTransaction;
+        const txData = tx.tx;
         const meta = tx.meta as TransactionMetadata;
 
         let amountStr = '0';
@@ -119,21 +119,21 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
         
         if ('Memos' in txData && Array.isArray(txData.Memos) && txData.Memos.length > 0) {
           const memoData = txData.Memos[0]?.Memo?.MemoData;
-          if (memoData && typeof memoData === 'string') { // Add type check for memoData
+          if (memoData && typeof memoData === 'string') {
             memo = hexToAscii(memoData);
             isBitbob = memo.startsWith('BitBob');
           }
         }
 
-        // Safe type assertions for required fields
-        const hash = typeof txData.hash === 'string' ? txData.hash : 'Unknown';
-        const type = typeof txData.TransactionType === 'string' ? txData.TransactionType : 'Unknown';
-        const date = typeof txData.date === 'number' ? formatXRPLDate(txData.date) : 'Unknown';
+        // Access properties safely with type guards
+        const hashValue = 'hash' in txData && typeof txData.hash === 'string' ? txData.hash : 'Unknown';
+        const typeValue = 'TransactionType' in txData && typeof txData.TransactionType === 'string' ? txData.TransactionType : 'Unknown';
+        const dateValue = 'date' in txData && typeof txData.date === 'number' ? formatXRPLDate(txData.date) : 'Unknown';
 
         const parsedTx: Transaction = {
-          hash,
-          type,
-          date,
+          hash: hashValue,
+          type: typeValue,
+          date: dateValue,
           amount: formatXRPAmount(amountStr),
           fee: ('Fee' in txData && txData.Fee) ? formatXRPAmount(txData.Fee) : '0 XRP',
           status: (meta && 'TransactionResult' in meta) ? meta.TransactionResult : 'unknown',
