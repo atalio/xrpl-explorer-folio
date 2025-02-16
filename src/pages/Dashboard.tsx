@@ -1,7 +1,6 @@
-
 import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { fetchTransactions, fetchBalance, type Transaction, type BalanceDetails, validateXRPLAddress } from "../services/xrpl";
+import { fetchTransactions, fetchBalance, type Transaction, validateXRPLAddress } from "../services/xrpl";
 import { toast } from "sonner";
 import QRCode from "qrcode";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
@@ -11,52 +10,40 @@ import { Button } from "@/components/ui/button";
 const Dashboard = () => {
   const { address } = useParams<{ address: string }>();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [balance, setBalance] = useState<BalanceDetails>({
-    total: "0.000000 XRP",
-    available: "0.000000 XRP",
-    reserve: "0.000000 XRP"
-  });
+  const [balance, setBalance] = useState<string>("0");
   const [loading, setLoading] = useState(true);
   const [qrCode, setQrCode] = useState<string>("");
   const [searchAddress, setSearchAddress] = useState("");
   const navigate = useNavigate();
 
   useEffect(() => {
-    const loadData = async () => {
-      if (!address) {
-        setLoading(false);
-        return;
-      }
+    if (address) {
+      QRCode.toDataURL(address, {
+        width: 200,
+        margin: 2,
+        color: {
+          dark: '#1A1F2C',
+          light: '#FFFFFF',
+        },
+      })
+        .then(url => setQrCode(url))
+        .catch(err => console.error("QR Code generation failed:", err));
+    }
+  }, [address]);
 
+  useEffect(() => {
+    const loadData = async () => {
+      if (!address) return;
       setLoading(true);
       try {
-        console.log('[Dashboard] Loading data for address:', address);
         const [txs, bal] = await Promise.all([
           fetchTransactions(address),
           fetchBalance(address)
         ]);
-        
-        console.log('[Dashboard] Loaded transactions:', txs);
-        console.log('[Dashboard] Loaded balance:', bal);
-        
         setTransactions(txs);
         setBalance(bal);
-
-        // Generate QR Code
-        QRCode.toDataURL(address, {
-          width: 200,
-          margin: 2,
-          color: {
-            dark: '#1A1F2C',
-            light: '#FFFFFF',
-          },
-        })
-          .then(url => setQrCode(url))
-          .catch(err => console.error("QR Code generation failed:", err));
-
       } catch (error) {
-        console.error('[Dashboard] Error loading data:', error);
-        toast.error("Failed to load dashboard data");
+        toast.error("Failed to load data");
       } finally {
         setLoading(false);
       }
@@ -132,18 +119,14 @@ const Dashboard = () => {
 
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
           <h1 className="text-2xl font-bold text-secondary mb-4">Account Overview</h1>
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
             <div className="p-4 bg-primary/10 rounded-lg">
               <p className="text-sm text-gray-600">Address</p>
               <p className="font-mono text-sm break-all">{address}</p>
             </div>
             <div className="p-4 bg-primary/10 rounded-lg">
-              <p className="text-sm text-gray-600">Total Balance</p>
-              <p className="font-bold text-xl">{balance.total}</p>
-            </div>
-            <div className="p-4 bg-primary/10 rounded-lg">
-              <p className="text-sm text-gray-600">Available Balance</p>
-              <p className="font-bold text-xl">{balance.available}</p>
+              <p className="text-sm text-gray-600">Balance</p>
+              <p className="font-bold text-xl">{balance} XRP</p>
             </div>
             <div className="p-4 bg-primary/10 rounded-lg flex justify-center items-center">
               {qrCode && (
@@ -156,17 +139,12 @@ const Dashboard = () => {
             </div>
           </div>
 
-          <div className="flex gap-2 mb-6">
+          <div className="flex gap-2">
             <Input
               placeholder="Enter XRPL address..."
               value={searchAddress}
               onChange={(e) => setSearchAddress(e.target.value)}
               className="font-mono"
-              onKeyPress={(e) => {
-                if (e.key === 'Enter') {
-                  handleSearch();
-                }
-              }}
             />
             <Button onClick={handleSearch}>Search</Button>
           </div>
@@ -189,68 +167,60 @@ const Dashboard = () => {
                 </tr>
               </thead>
               <tbody>
-                {transactions.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="text-center py-8 text-gray-500">
-                      No transactions found
+                {transactions.map((tx) => (
+                  <tr key={tx.hash} className="border-b hover:bg-gray-50">
+                    <td className="p-4 flex items-center gap-2">
+                      {tx.type}
+                      {tx.sourceTag === "29202152" && (
+                        <span className="bg-primary/10 text-primary text-xs px-2 py-1 rounded-full">
+                          BitBob
+                        </span>
+                      )}
                     </td>
-                  </tr>
-                ) : (
-                  transactions.map((tx) => (
-                    <tr key={tx.hash} className="border-b hover:bg-gray-50">
-                      <td className="p-4 flex items-center gap-2">
-                        {tx.type}
-                        {tx.isBitbob && (
-                          <span className="bg-primary/10 text-primary text-xs px-2 py-1 rounded-full">
-                            BitBob
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-4">
-                        <Link 
-                          to={`/transaction/${tx.hash}`}
+                    <td className="p-4">
+                      <Link 
+                        to={`/transaction/${tx.hash}`}
+                        className="font-mono text-sm text-primary hover:underline"
+                      >
+                        {tx.hash ? tx.hash.substring(0, 8) + '...' : 'Unknown'}
+                      </Link>
+                    </td>
+                    <td className="p-4">
+                      {tx.from && (
+                        <button
+                          onClick={() => handleAddressClick(tx.from)}
                           className="font-mono text-sm text-primary hover:underline"
                         >
-                          {tx.hash ? tx.hash.substring(0, 8) + '...' : 'Unknown'}
-                        </Link>
-                      </td>
-                      <td className="p-4">
-                        {tx.from && (
-                          <button
-                            onClick={() => handleAddressClick(tx.from)}
-                            className="font-mono text-sm text-primary hover:underline"
-                          >
-                            {tx.from.substring(0, 8)}...
-                          </button>
-                        )}
-                      </td>
-                      <td className="p-4">
-                        {tx.to && (
-                          <button
-                            onClick={() => handleAddressClick(tx.to)}
-                            className="font-mono text-sm text-primary hover:underline"
-                          >
-                            {tx.to.substring(0, 8)}...
-                          </button>
-                        )}
-                      </td>
-                      <td className="p-4">{tx.date || 'Unknown'}</td>
-                      <td className="p-4">
-                        {getMoneyFlowIndicator(tx, address)}
-                      </td>
-                      <td className="p-4">{tx.fee || '0'}</td>
-                      <td className="p-4">
-                        <span className={`px-2 py-1 rounded-full text-xs ${
-                          tx.status === 'tesSUCCESS' ? 'bg-green-100 text-green-800' : 
-                          tx.status === 'failed' ? 'bg-red-100 text-red-800' : 
-                          'bg-gray-100 text-gray-800'
-                        }`}>
-                          {tx.status || 'unknown'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                )}
+                          {tx.from.substring(0, 8)}...
+                        </button>
+                      )}
+                    </td>
+                    <td className="p-4">
+                      {tx.to && (
+                        <button
+                          onClick={() => handleAddressClick(tx.to)}
+                          className="font-mono text-sm text-primary hover:underline"
+                        >
+                          {tx.to.substring(0, 8)}...
+                        </button>
+                      )}
+                    </td>
+                    <td className="p-4">{tx.date || 'Unknown'}</td>
+                    <td className="p-4">
+                      {getMoneyFlowIndicator(tx, address)}
+                    </td>
+                    <td className="p-4">{tx.fee || '0'}</td>
+                    <td className="p-4">
+                      <span className={`px-2 py-1 rounded-full text-xs ${
+                        tx.status === 'success' ? 'bg-green-100 text-green-800' : 
+                        tx.status === 'failed' ? 'bg-red-100 text-red-800' : 
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {tx.status || 'unknown'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
