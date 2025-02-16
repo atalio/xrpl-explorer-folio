@@ -119,22 +119,27 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
         
         if ('Memos' in txData && Array.isArray(txData.Memos) && txData.Memos.length > 0) {
           const memoData = txData.Memos[0]?.Memo?.MemoData;
-          if (memoData) {
+          if (memoData && typeof memoData === 'string') { // Add type check for memoData
             memo = hexToAscii(memoData);
             isBitbob = memo.startsWith('BitBob');
           }
         }
 
+        // Safe type assertions for required fields
+        const hash = typeof txData.hash === 'string' ? txData.hash : 'Unknown';
+        const type = typeof txData.TransactionType === 'string' ? txData.TransactionType : 'Unknown';
+        const date = typeof txData.date === 'number' ? formatXRPLDate(txData.date) : 'Unknown';
+
         const parsedTx: Transaction = {
-          hash: ('hash' in txData && txData.hash) ? txData.hash : 'Unknown',
-          type: ('TransactionType' in txData) ? txData.TransactionType : 'Unknown',
-          date: ('date' in txData && txData.date) ? formatXRPLDate(txData.date) : 'Unknown',
+          hash,
+          type,
+          date,
           amount: formatXRPAmount(amountStr),
-          fee: ('Fee' in txData) ? formatXRPAmount(txData.Fee) : '0 XRP',
+          fee: ('Fee' in txData && txData.Fee) ? formatXRPAmount(txData.Fee) : '0 XRP',
           status: (meta && 'TransactionResult' in meta) ? meta.TransactionResult : 'unknown',
           sourceTag: ('SourceTag' in txData) ? txData.SourceTag?.toString() : undefined,
-          from: ('Account' in txData) ? txData.Account : 'Unknown',
-          to: ('Destination' in txData) ? txData.Destination as string : 'Unknown',
+          from: ('Account' in txData && typeof txData.Account === 'string') ? txData.Account : 'Unknown',
+          to: ('Destination' in txData && typeof txData.Destination === 'string') ? txData.Destination : 'Unknown',
           memo,
           isBitbob
         };
