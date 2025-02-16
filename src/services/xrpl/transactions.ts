@@ -14,6 +14,8 @@ export const fetchTransactionDetails = async (hash: string): Promise<Transaction
   let client = null;
   try {
     client = await getClient();
+    console.log('Fetching transaction details for hash:', hash);
+    
     const response = await client.request({
       command: "tx",
       transaction: hash,
@@ -47,9 +49,9 @@ export const fetchTransactionDetails = async (hash: string): Promise<Transaction
       flags: Number(txInfo.Flags),
       lastLedgerSequence: txInfo.LastLedgerSequence,
       ticketSequence: txInfo.TicketSequence,
-      memos: [txInfo.Memos || []].map((memoObj: any) => 
+      memos: txInfo.Memos?.map((memoObj: any) => 
         memoObj.Memo?.MemoData ? hexToAscii(memoObj.Memo.MemoData) : ''
-      ).filter(Boolean),
+      ).filter(Boolean) ?? [],
       raw: txInfo
     };
 
@@ -69,7 +71,6 @@ export const fetchTransactionDetails = async (hash: string): Promise<Transaction
 export const fetchTransactions = async (address: string): Promise<Transaction[]> => {
   let client = null;
   let transactions: Transaction[] = [];
-  let succeeded = false;
 
   try {
     client = await getClient();
@@ -81,7 +82,7 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
       ledger_index_min: -1,
       ledger_index_max: -1,
       binary: false,
-      limit: 30,
+      limit: 100, // Increased limit for more transactions
       forward: false
     }) as AccountTxResponse;
 
@@ -90,7 +91,7 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
       return [];
     }
 
-    console.log('Raw transactions:', response.result.transactions);
+    console.log(`Found ${response.result.transactions.length} raw transactions`);
 
     transactions = response.result.transactions
       .filter((tx): tx is AccountTxTransaction => {
@@ -104,6 +105,7 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
         const txData = tx.tx as unknown as Record<string, any>;
         const meta = tx.meta as TransactionMetadata;
 
+        // Process amount
         let amountStr = '0';
         if (txData.Amount) {
           const amount = txData.Amount;
@@ -114,6 +116,7 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
           }
         }
 
+        // Process memo and BitBob status
         let memo: string | undefined;
         let isBitbob = false;
         
@@ -125,21 +128,21 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
           }
         }
 
-        // Access properties safely with type guards
-        const hashValue = txData.hash && typeof txData.hash === 'string' ? txData.hash : 'Unknown';
-        const typeValue = txData.TransactionType && typeof txData.TransactionType === 'string' ? txData.TransactionType : 'Unknown';
-        const dateValue = txData.date && typeof txData.date === 'number' ? formatXRPLDate(txData.date) : 'Unknown';
+        // Check BitBob source tag
+        if (txData.SourceTag === "29202152") {
+          isBitbob = true;
+        }
 
         const parsedTx: Transaction = {
-          hash: hashValue,
-          type: typeValue,
-          date: dateValue,
+          hash: txData.hash?.toString() || 'Unknown',
+          type: txData.TransactionType?.toString() || 'Unknown',
+          date: txData.date ? formatXRPLDate(Number(txData.date)) : 'Unknown',
           amount: formatXRPAmount(amountStr),
           fee: txData.Fee ? formatXRPAmount(txData.Fee) : '0 XRP',
-          status: (meta && 'TransactionResult' in meta) ? meta.TransactionResult : 'unknown',
+          status: meta.TransactionResult || 'unknown',
           sourceTag: txData.SourceTag?.toString(),
-          from: txData.Account && typeof txData.Account === 'string' ? txData.Account : 'Unknown',
-          to: txData.Destination && typeof txData.Destination === 'string' ? txData.Destination : 'Unknown',
+          from: txData.Account?.toString() || 'Unknown',
+          to: txData.Destination?.toString() || 'Unknown',
           memo,
           isBitbob
         };
@@ -157,21 +160,21 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
         return isValid;
       });
 
-    succeeded = transactions.length > 0;
-    console.log(`Processed ${transactions.length} total transactions`);
+    console.log(`Successfully processed ${transactions.length} valid transactions`);
+    
+    if (transactions.length === 0) {
+      toast.error("No valid transactions found");
+    }
+    
+    return transactions;
+
   } catch (error) {
     console.error("Error fetching transactions:", error);
     toast.error("Failed to fetch transactions");
+    return [];
   } finally {
     if (client) {
       await client.disconnect();
     }
   }
-
-  if (!succeeded) {
-    toast.error("Failed to fetch transactions");
-    return [];
-  }
-
-  return transactions;
 };
