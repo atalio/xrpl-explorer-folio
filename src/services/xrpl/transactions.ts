@@ -1,3 +1,4 @@
+
 import { toast } from "sonner";
 import { getClient, formatXRPAmount, formatXRPLDate, hexToAscii } from './utils';
 import type { 
@@ -73,12 +74,15 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
     client = await getClient();
     console.log(`[XRPL] Fetching transactions for address:`, address);
     
+    // Request transactions with specific parameters
     const response = await client.request({
       command: "account_tx",
       account: address,
       binary: false,
       limit: 200,
-      forward: false
+      forward: false,
+      ledger_index_min: -1,
+      ledger_index_max: -1
     });
 
     console.log('[XRPL] Raw response:', response);
@@ -88,40 +92,64 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
       return [];
     }
 
+    // Map and process transactions
     const transactions = response.result.transactions
-      .filter(tx => tx.tx && tx.meta)
       .map(tx => {
-        const txData = tx.tx;
-        const meta = tx.meta;
-        
-        // Extract amount
-        let amount = '0';
-        if (typeof txData.Amount === 'string') {
-          amount = txData.Amount;
-        } else if (txData.Amount?.value) {
-          amount = txData.Amount.value;
+        if (!tx.tx || !tx.meta) {
+          console.warn('[XRPL] Invalid transaction structure:', tx);
+          return null;
         }
 
-        // Check for BitBob transaction
+        const txData = tx.tx;
+        const meta = tx.meta;
+
+        // Process amount with proper error handling
+        let amount = '0';
+        try {
+          if (typeof txData.Amount === 'string') {
+            amount = txData.Amount;
+          } else if (txData.Amount?.value) {
+            amount = txData.Amount.value;
+          }
+        } catch (error) {
+          console.error('[XRPL] Error processing amount:', error);
+        }
+
+        // Process memo and BitBob detection
         let memo = '';
         let isBitbob = false;
 
-        if (Array.isArray(txData.Memos) && txData.Memos.length > 0) {
-          const memoData = txData.Memos[0]?.Memo?.MemoData;
-          if (memoData) {
-            memo = hexToAscii(memoData);
-            isBitbob = memo.startsWith('BitBob');
+        try {
+          if (Array.isArray(txData.Memos) && txData.Memos.length > 0) {
+            const memoData = txData.Memos[0]?.Memo?.MemoData;
+            if (memoData) {
+              memo = hexToAscii(memoData);
+              isBitbob = memo.startsWith('BitBob');
+            }
           }
+
+          // Check for BitBob source tag (both string and number formats)
+          const sourceTag = txData.SourceTag;
+          if (sourceTag === "29202152" || sourceTag === 29202152) {
+            isBitbob = true;
+          }
+        } catch (error) {
+          console.error('[XRPL] Error processing memo:', error);
         }
 
-        // Check for BitBob source tag
-        if (txData.SourceTag === "29202152" || txData.SourceTag === 29202152) {
-          isBitbob = true;
+        // Create transaction object with mandatory fields
+        if (!txData.hash || !txData.Account || !meta.TransactionResult) {
+          console.warn('[XRPL] Missing required fields:', { 
+            hash: txData.hash, 
+            account: txData.Account, 
+            result: meta.TransactionResult 
+          });
+          return null;
         }
 
         const transaction: Transaction = {
           hash: txData.hash,
-          type: txData.TransactionType,
+          type: txData.TransactionType || 'Unknown',
           date: formatXRPLDate(txData.date),
           amount: formatXRPAmount(amount),
           fee: formatXRPAmount(txData.Fee),
@@ -133,11 +161,27 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
           isBitbob
         };
 
+        console.log('[XRPL] Processed transaction:', transaction);
         return transaction;
       })
-      .filter(tx => tx.hash && tx.from && tx.status);
+      .filter((tx): tx is Transaction => {
+        if (!tx) {
+          return false;
+        }
+        const isValid = Boolean(tx.hash && tx.from && tx.status);
+        if (!isValid) {
+          console.warn('[XRPL] Filtered out invalid transaction:', tx);
+        }
+        return isValid;
+      });
 
-    console.log(`[XRPL] Processed ${transactions.length} transactions:`, transactions);
+    console.log(`[XRPL] Successfully processed ${transactions.length} transactions`);
+    
+    if (transactions.length === 0) {
+      console.warn('[XRPL] No valid transactions found after processing');
+      toast.error("No transactions found for this address");
+    }
+    
     return transactions;
 
   } catch (error) {
