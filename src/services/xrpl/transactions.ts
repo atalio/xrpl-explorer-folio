@@ -87,6 +87,9 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
       forward: false
     });
 
+    // Store the raw response in a global variable for debugging
+    (window as any).__xrpl_debug_response = response;
+    
     console.log('[XRPL] Raw response:', response);
 
     if (!response.result?.transactions?.length) {

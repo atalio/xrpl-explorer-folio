@@ -7,10 +7,12 @@ import QRCode from "qrcode";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 const Dashboard = () => {
   const { address } = useParams<{ address: string }>();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [rawResponse, setRawResponse] = useState<string>("");
   const [balance, setBalance] = useState<BalanceDetails>({
     total: "0.000000 XRP",
     available: "0.000000 XRP",
@@ -35,6 +37,12 @@ const Dashboard = () => {
           fetchTransactions(address),
           fetchBalance(address)
         ]);
+        
+        // Store the raw response from console logs
+        const consoleOutput = (window as any).__xrpl_debug_response;
+        if (consoleOutput) {
+          setRawResponse(JSON.stringify(consoleOutput, null, 2));
+        }
         
         console.log('[Dashboard] Loaded transactions:', txs);
         console.log('[Dashboard] Loaded balance:', bal);
@@ -170,6 +178,21 @@ const Dashboard = () => {
             />
             <Button onClick={handleSearch}>Search</Button>
           </div>
+
+          {/* Debug Section */}
+          <Collapsible className="mb-4">
+            <CollapsibleTrigger className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700">
+              <span>Debug Information</span>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="mt-2 p-4 bg-gray-50 rounded-lg">
+                <h3 className="text-sm font-semibold mb-2">Raw XRPL Response:</h3>
+                <pre className="text-xs overflow-x-auto">
+                  {rawResponse || "No response data available"}
+                </pre>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
         </div>
 
         <div className="bg-white rounded-2xl shadow-lg p-6">
