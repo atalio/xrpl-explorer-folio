@@ -1,4 +1,3 @@
-
 import { toast } from "sonner";
 import { getClient, formatXRPAmount, formatXRPLDate, hexToAscii } from './utils';
 import type { 
@@ -68,97 +67,69 @@ export const fetchTransactionDetails = async (hash: string): Promise<Transaction
   }
 };
 
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 export const fetchTransactions = async (address: string): Promise<Transaction[]> => {
   let client = null;
   try {
     client = await getClient();
     console.log(`[XRPL] Fetching transactions for address:`, address);
+
+    await delay(1500);
     
-    // Request transactions with specific parameters
     const response = await client.request({
       command: "account_tx",
       account: address,
       binary: false,
-      limit: 200,
-      forward: false,
       ledger_index_min: -1,
-      ledger_index_max: -1
+      ledger_index_max: -1,
+      limit: 200,
+      forward: false
     });
 
     console.log('[XRPL] Raw response:', response);
 
-    if (!response.result?.transactions) {
+    if (!response.result?.transactions?.length) {
       console.warn('[XRPL] No transactions found in response');
       return [];
     }
 
-    // Map and process transactions
     const transactions = response.result.transactions
+      .filter(tx => tx.tx && tx.meta)
       .map(tx => {
-        if (!tx.tx || !tx.meta) {
-          console.warn('[XRPL] Invalid transaction structure:', tx);
-          return null;
-        }
-
         const txData = tx.tx;
         const meta = tx.meta;
-
-        // Process amount with proper error handling
+        
         let amount = '0';
-        try {
-          if (txData.Amount) {
-            if (typeof txData.Amount === 'string') {
-              amount = txData.Amount;
-            } else if (typeof txData.Amount === 'object' && 'value' in txData.Amount) {
-              amount = txData.Amount.value;
-            }
-          } else if (txData.TakerGets) {
-            // Handle OfferCreate transactions
-            amount = typeof txData.TakerGets === 'string' ? txData.TakerGets : txData.TakerGets.value;
-          }
-        } catch (error) {
-          console.error('[XRPL] Error processing amount:', error);
+        if (typeof txData.Amount === 'string') {
+          amount = txData.Amount;
+        } else if (txData.Amount?.value) {
+          amount = txData.Amount.value;
+        } else if (txData.TakerGets && typeof txData.TakerGets === 'string') {
+          amount = txData.TakerGets;
         }
 
-        // Process destination/recipient
-        let destination = txData.Destination;
-        if (!destination && txData.TransactionType === 'OfferCreate') {
-          destination = 'XRPL DEX';
-        }
+        const destination = txData.Destination || 
+                          (txData.TransactionType === 'OfferCreate' ? 'XRPL DEX' : 'Unknown');
 
-        // Process memo and BitBob detection
-        let memo = '';
         let isBitbob = false;
+        let memo = '';
 
-        try {
-          if (Array.isArray(txData.Memos) && txData.Memos.length > 0) {
-            const memoData = txData.Memos[0]?.Memo?.MemoData;
-            if (memoData) {
-              memo = hexToAscii(memoData);
-              isBitbob = memo.startsWith('BitBob');
+        if (txData.SourceTag === 29202152 || txData.SourceTag === "29202152") {
+          isBitbob = true;
+        }
+
+        if (txData.Memos?.length > 0) {
+          const memoData = txData.Memos[0]?.Memo?.MemoData;
+          if (memoData) {
+            memo = hexToAscii(memoData);
+            if (memo.startsWith('BitBob')) {
+              isBitbob = true;
             }
           }
-
-          // Check for BitBob source tag (both string and number formats)
-          const sourceTag = txData.SourceTag;
-          if (sourceTag === "29202152" || sourceTag === 29202152) {
-            isBitbob = true;
-          }
-        } catch (error) {
-          console.error('[XRPL] Error processing memo:', error);
         }
 
-        // Create transaction object with mandatory fields
-        if (!txData.hash || !txData.Account || !meta.TransactionResult) {
-          console.warn('[XRPL] Missing required fields:', { 
-            hash: txData.hash, 
-            account: txData.Account, 
-            result: meta.TransactionResult 
-          });
-          return null;
-        }
-
-        const transaction: Transaction = {
+        return {
           hash: txData.hash,
           type: txData.TransactionType || 'Unknown',
           date: formatXRPLDate(txData.date),
@@ -167,18 +138,12 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
           status: meta.TransactionResult,
           sourceTag: txData.SourceTag?.toString(),
           from: txData.Account,
-          to: destination || 'Unknown',
+          to: destination,
           memo: memo || undefined,
           isBitbob
-        };
-
-        console.log('[XRPL] Processed transaction:', transaction);
-        return transaction;
+        } as Transaction;
       })
-      .filter((tx): tx is Transaction => {
-        if (!tx) {
-          return false;
-        }
+      .filter(tx => {
         const isValid = Boolean(tx.hash && tx.from && tx.status);
         if (!isValid) {
           console.warn('[XRPL] Filtered out invalid transaction:', tx);
