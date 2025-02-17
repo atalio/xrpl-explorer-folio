@@ -74,12 +74,15 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
     client = await getClient();
     console.log(`[XRPL] Fetching transactions for address:`, address);
     
+    // Request transactions with specific parameters
     const response = await client.request({
       command: "account_tx",
       account: address,
       binary: false,
       limit: 200,
-      forward: false
+      forward: false,
+      ledger_index_min: -1,
+      ledger_index_max: -1
     });
 
     console.log('[XRPL] Raw response:', response);
@@ -89,18 +92,16 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
       return [];
     }
 
+    // Map and process transactions
     const transactions = response.result.transactions
       .map(tx => {
-        console.log('[XRPL] Processing transaction:', tx);
-        
-        // Extract tx and meta data
-        const txData = tx.tx || tx;
-        const meta = tx.meta || { TransactionResult: 'unknown' };
-
-        if (!txData) {
-          console.warn('[XRPL] Missing transaction data');
+        if (!tx.tx || !tx.meta) {
+          console.warn('[XRPL] Invalid transaction structure:', tx);
           return null;
         }
+
+        const txData = tx.tx;
+        const meta = tx.meta;
 
         // Process amount with proper error handling
         let amount = '0';
@@ -138,7 +139,7 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
             }
           }
 
-          // Check for BitBob source tag
+          // Check for BitBob source tag (both string and number formats)
           const sourceTag = txData.SourceTag;
           if (sourceTag === "29202152" || sourceTag === 29202152) {
             isBitbob = true;
@@ -147,19 +148,23 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
           console.error('[XRPL] Error processing memo:', error);
         }
 
-        // Validate required fields
-        if (!txData.hash || !txData.Account) {
-          console.warn('[XRPL] Missing required fields:', txData);
+        // Create transaction object with mandatory fields
+        if (!txData.hash || !txData.Account || !meta.TransactionResult) {
+          console.warn('[XRPL] Missing required fields:', { 
+            hash: txData.hash, 
+            account: txData.Account, 
+            result: meta.TransactionResult 
+          });
           return null;
         }
 
         const transaction: Transaction = {
           hash: txData.hash,
           type: txData.TransactionType || 'Unknown',
-          date: txData.date ? formatXRPLDate(txData.date) : 'Unknown',
+          date: formatXRPLDate(txData.date),
           amount: formatXRPAmount(amount),
-          fee: formatXRPAmount(txData.Fee || '0'),
-          status: meta.TransactionResult || 'unknown',
+          fee: formatXRPAmount(txData.Fee),
+          status: meta.TransactionResult,
           sourceTag: txData.SourceTag?.toString(),
           from: txData.Account,
           to: destination || 'Unknown',
@@ -174,7 +179,7 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
         if (!tx) {
           return false;
         }
-        const isValid = Boolean(tx.hash && tx.from);
+        const isValid = Boolean(tx.hash && tx.from && tx.status);
         if (!isValid) {
           console.warn('[XRPL] Filtered out invalid transaction:', tx);
         }
