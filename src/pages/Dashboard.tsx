@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { fetchTransactions, fetchBalance, type Transaction, type BalanceDetails, validateXRPLAddress } from "../services/xrpl";
@@ -8,9 +7,27 @@ import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbSeparator } from 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { LanguageSelector } from "@/components/LanguageSelector";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { 
+  Wallet,
+  Search,
+  QrCode,
+  ArrowLeftRight,
+  Clock,
+  Hash,
+  ArrowRight,
+  Tag,
+  FileText,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  Code
+} from "lucide-react";
 
 const Dashboard = () => {
   const { address } = useParams<{ address: string }>();
+  const { t } = useLanguage();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [rawResponse, setRawResponse] = useState<string>("");
   const [balance, setBalance] = useState<BalanceDetails>({
@@ -38,7 +55,6 @@ const Dashboard = () => {
           fetchBalance(address)
         ]);
         
-        // Store the raw response from console logs
         const consoleOutput = (window as any).__xrpl_debug_response;
         if (consoleOutput) {
           setRawResponse(JSON.stringify(consoleOutput, null, 2));
@@ -50,7 +66,6 @@ const Dashboard = () => {
         setTransactions(txs);
         setBalance(bal);
 
-        // Generate QR Code
         QRCode.toDataURL(address, {
           width: 200,
           margin: 2,
@@ -126,47 +141,65 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/5 to-secondary/5 p-4 sm:p-8">
       <div className="max-w-7xl mx-auto">
-        <Breadcrumb className="mb-6">
-          <BreadcrumbList>
-            <BreadcrumbItem>
-              <Link to="/" className="text-primary hover:text-primary/90">Home</Link>
-            </BreadcrumbItem>
-            <BreadcrumbSeparator />
-            <BreadcrumbItem>
-              <span>Dashboard</span>
-            </BreadcrumbItem>
-          </BreadcrumbList>
-        </Breadcrumb>
+        <div className="flex justify-between items-center mb-6">
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem>
+                <Link to="/" className="text-primary hover:text-primary/90">{t('nav.home')}</Link>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <span>{t('nav.dashboard')}</span>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+          <LanguageSelector />
+        </div>
 
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
-          <h1 className="text-2xl font-bold text-secondary mb-4">Account Overview</h1>
+          <h1 className="text-2xl font-bold text-secondary mb-4 flex items-center gap-2">
+            <Wallet className="h-6 w-6" />
+            {t('dashboard.title')}
+          </h1>
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
             <div className="p-4 bg-primary/10 rounded-lg">
-              <p className="text-sm text-gray-600">Address</p>
+              <p className="text-sm text-gray-600 flex items-center gap-2">
+                <Hash className="h-4 w-4" />
+                {t('dashboard.address')}
+              </p>
               <p className="font-mono text-sm break-all">{address}</p>
             </div>
             <div className="p-4 bg-primary/10 rounded-lg">
-              <p className="text-sm text-gray-600">Total Balance</p>
+              <p className="text-sm text-gray-600 flex items-center gap-2">
+                <ArrowLeftRight className="h-4 w-4" />
+                {t('dashboard.totalBalance')}
+              </p>
               <p className="font-bold text-xl">{balance.total}</p>
             </div>
             <div className="p-4 bg-primary/10 rounded-lg">
-              <p className="text-sm text-gray-600">Available Balance</p>
+              <p className="text-sm text-gray-600 flex items-center gap-2">
+                <ArrowLeftRight className="h-4 w-4" />
+                {t('dashboard.availableBalance')}
+              </p>
               <p className="font-bold text-xl">{balance.available}</p>
             </div>
             <div className="p-4 bg-primary/10 rounded-lg flex justify-center items-center">
-              {qrCode && (
-                <img 
-                  src={qrCode} 
-                  alt="XRPL Address QR Code" 
-                  className="max-w-[120px] rounded-lg shadow-sm"
-                />
-              )}
+              <div className="flex flex-col items-center gap-2">
+                <QrCode className="h-4 w-4 text-gray-600" />
+                {qrCode && (
+                  <img 
+                    src={qrCode} 
+                    alt="XRPL Address QR Code" 
+                    className="max-w-[120px] rounded-lg shadow-sm"
+                  />
+                )}
+              </div>
             </div>
           </div>
 
           <div className="flex gap-2 mb-6">
             <Input
-              placeholder="Enter XRPL address..."
+              placeholder={t('dashboard.searchPlaceholder')}
               value={searchAddress}
               onChange={(e) => setSearchAddress(e.target.value)}
               className="font-mono"
@@ -176,13 +209,16 @@ const Dashboard = () => {
                 }
               }}
             />
-            <Button onClick={handleSearch}>Search</Button>
+            <Button onClick={handleSearch}>
+              <Search className="h-4 w-4 mr-2" />
+              {t('dashboard.search')}
+            </Button>
           </div>
 
-          {/* Raw Data Section */}
           <Collapsible className="mb-4">
             <CollapsibleTrigger className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700">
-              <span>Raw Data</span>
+              <Code className="h-4 w-4" />
+              <span>{t('dashboard.rawData')}</span>
             </CollapsibleTrigger>
             <CollapsibleContent>
               <div className="mt-2 p-4 bg-gray-50 rounded-lg">

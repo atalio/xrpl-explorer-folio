@@ -1,10 +1,10 @@
-
 import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { fetchTransactionDetails, type TransactionDetail } from "../services/xrpl";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { toast } from "sonner";
+import { LanguageSelector } from "@/components/LanguageSelector";
 import { 
   ArrowLeftRight,
   Clock,
@@ -23,11 +23,20 @@ const Transaction = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { t } = useLanguage();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const loadTransaction = async () => {
       if (!hash) {
         setError("No transaction hash provided");
+        setLoading(false);
+        return;
+      }
+
+      // Try to get from sessionStorage first
+      const cached = sessionStorage.getItem(`tx_${hash}`);
+      if (cached) {
+        setTransaction(JSON.parse(cached));
         setLoading(false);
         return;
       }
@@ -54,6 +63,15 @@ const Transaction = () => {
 
     loadTransaction();
   }, [hash]);
+
+  const handleDashboardClick = (address: string) => {
+    // Store the current transaction data before navigating
+    if (transaction) {
+      sessionStorage.setItem(`tx_${transaction.hash}`, JSON.stringify(transaction));
+      sessionStorage.setItem('last_accessed_address', address);
+    }
+    navigate(`/dashboard/${address}`);
+  };
 
   const getStatusIcon = (status: string) => {
     if (status === 'tesSUCCESS') return <CheckCircle className="text-green-500" />;
@@ -93,23 +111,29 @@ const Transaction = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/5 to-secondary/5 p-4 sm:p-8">
       <div className="max-w-4xl mx-auto">
-        <Breadcrumb className="mb-6">
-          <BreadcrumbList>
-            <BreadcrumbItem>
-              <Link to="/" className="text-primary hover:text-primary/90">{t('nav.home')}</Link>
-            </BreadcrumbItem>
-            <BreadcrumbSeparator />
-            <BreadcrumbItem>
-              <Link to={`/dashboard/${transaction.from}`} className="text-primary hover:text-primary/90">
-                {t('nav.dashboard')}
-              </Link>
-            </BreadcrumbItem>
-            <BreadcrumbSeparator />
-            <BreadcrumbItem>
-              <span>{t('nav.transaction')}</span>
-            </BreadcrumbItem>
-          </BreadcrumbList>
-        </Breadcrumb>
+        <div className="flex justify-between items-center mb-6">
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem>
+                <Link to="/" className="text-primary hover:text-primary/90">{t('nav.home')}</Link>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <button 
+                  onClick={() => transaction?.from && handleDashboardClick(transaction.from)}
+                  className="text-primary hover:text-primary/90"
+                >
+                  {t('nav.dashboard')}
+                </button>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <span>{t('nav.transaction')}</span>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+          <LanguageSelector />
+        </div>
 
         <div className="bg-white rounded-2xl shadow-lg p-6">
           <h1 className="text-2xl font-bold text-secondary mb-6 flex items-center gap-2">

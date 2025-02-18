@@ -33,19 +33,22 @@ export const fetchTransactionDetails = async (hash: string): Promise<Transaction
     const memoData = txInfo.Memos?.[0]?.Memo?.MemoData;
     const memo = memoData ? hexToAscii(memoData) : undefined;
 
+    const amount = txInfo.meta?.delivered_amount || txInfo.Amount || txInfo.DeliverMax;
+
+    // Store transaction data in sessionStorage for persistence
     const transactionDetail: TransactionDetail = {
-      hash: txInfo.hash as string,
-      type: txInfo.TransactionType as string,
-      date: formatXRPLDate(txInfo.date as number),
-      amount: formatXRPAmount(txInfo.Amount),
+      hash: txInfo.hash,
+      type: txInfo.TransactionType,
+      date: txInfo.date ? formatXRPLDate(txInfo.date) : txInfo.close_time_iso,
+      amount: formatXRPAmount(amount),
       fee: formatXRPAmount(txInfo.Fee),
-      status: txInfo.meta.TransactionResult as string,
+      status: txInfo.meta.TransactionResult,
       sourceTag: txInfo.SourceTag?.toString(),
-      from: txInfo.Account as string,
-      to: txInfo.Destination as string,
+      from: txInfo.Account,
+      to: txInfo.Destination,
       memo,
-      isBitbob: memo?.startsWith('BitBob') ?? false,
-      sequence: txInfo.Sequence as number,
+      isBitbob: (txInfo.SourceTag === 29202152 || txInfo.SourceTag === "29202152" || (memo && memo.startsWith('BitBob'))),
+      sequence: txInfo.Sequence,
       flags: Number(txInfo.Flags),
       lastLedgerSequence: txInfo.LastLedgerSequence,
       ticketSequence: txInfo.TicketSequence,
@@ -54,6 +57,10 @@ export const fetchTransactionDetails = async (hash: string): Promise<Transaction
       ).filter(Boolean) ?? [],
       raw: txInfo
     };
+
+    // Store in sessionStorage
+    sessionStorage.setItem(`tx_${hash}`, JSON.stringify(transactionDetail));
+    sessionStorage.setItem('last_accessed_address', txInfo.Account);
 
     console.log('Processed transaction detail:', transactionDetail);
     return transactionDetail;
