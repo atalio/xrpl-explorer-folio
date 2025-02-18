@@ -99,23 +99,26 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
     }
 
     const transactions = response.result.transactions
-      .filter(tx => tx.tx_json && tx.meta) // Update to use tx_json
       .map(tx => {
-        const txData = tx.tx_json; // Use tx_json instead of tx
+        const txData = tx.tx_json;
         const meta = tx.meta;
+        const closeTimeIso = tx.close_time_iso;
+        const hash = tx.hash;
+        
+        if (!txData || !meta || !hash) {
+          console.warn('[XRPL] Invalid transaction data:', tx);
+          return null;
+        }
         
         let amount = '0';
-        if (txData.DeliverMax) { // Check for DeliverMax first
+        if (meta.delivered_amount) {
+          amount = meta.delivered_amount;
+        } else if (txData.DeliverMax) {
           amount = txData.DeliverMax;
         } else if (typeof txData.Amount === 'string') {
           amount = txData.Amount;
         } else if (txData.Amount?.value) {
           amount = txData.Amount.value;
-        }
-
-        // Get delivered amount from meta if available
-        if (meta.delivered_amount && typeof meta.delivered_amount === 'string') {
-          amount = meta.delivered_amount;
         }
 
         const destination = txData.Destination || 
@@ -138,10 +141,13 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
           }
         }
 
+        // Use ISO timestamp if available, otherwise fallback to UNIX timestamp
+        const timestamp = closeTimeIso ? new Date(closeTimeIso).getTime() / 1000 : txData.date;
+
         return {
-          hash: txData.hash,
+          hash: hash,
           type: txData.TransactionType || 'Unknown',
-          date: formatXRPLDate(txData.date),
+          date: formatXRPLDate(timestamp),
           amount: formatXRPAmount(amount),
           fee: formatXRPAmount(txData.Fee),
           status: meta.TransactionResult,
@@ -152,8 +158,8 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
           isBitbob
         } as Transaction;
       })
-      .filter(tx => {
-        const isValid = Boolean(tx.hash && tx.from && tx.status);
+      .filter((tx): tx is Transaction => {
+        const isValid = Boolean(tx?.hash && tx?.from && tx?.status);
         if (!isValid) {
           console.warn('[XRPL] Filtered out invalid transaction:', tx);
         }
