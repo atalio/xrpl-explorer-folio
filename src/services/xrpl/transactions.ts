@@ -1,3 +1,4 @@
+
 import { toast } from "sonner";
 import { getClient, formatXRPAmount, formatXRPLDate, hexToAscii } from './utils';
 import type { 
@@ -98,18 +99,23 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
     }
 
     const transactions = response.result.transactions
-      .filter(tx => tx.tx && tx.meta)
+      .filter(tx => tx.tx_json && tx.meta) // Update to use tx_json
       .map(tx => {
-        const txData = tx.tx;
+        const txData = tx.tx_json; // Use tx_json instead of tx
         const meta = tx.meta;
         
         let amount = '0';
-        if (typeof txData.Amount === 'string') {
+        if (txData.DeliverMax) { // Check for DeliverMax first
+          amount = txData.DeliverMax;
+        } else if (typeof txData.Amount === 'string') {
           amount = txData.Amount;
         } else if (txData.Amount?.value) {
           amount = txData.Amount.value;
-        } else if (txData.TakerGets && typeof txData.TakerGets === 'string') {
-          amount = txData.TakerGets;
+        }
+
+        // Get delivered amount from meta if available
+        if (meta.delivered_amount && typeof meta.delivered_amount === 'string') {
+          amount = meta.delivered_amount;
         }
 
         const destination = txData.Destination || 
