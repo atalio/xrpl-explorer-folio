@@ -6,6 +6,7 @@ import { fetchTransactionDetails, type TransactionDetail } from "../services/xrp
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { toast } from "sonner";
+import { Footer } from "@/components/ui/footer";
 import { LanguageSelector } from "@/components/LanguageSelector";
 import {
   ArrowLeftRight,
@@ -273,7 +274,8 @@ const Transaction = () => {
             </div>
           </div>
         </div>
-      </div>
+       <Footer />
+     </div>
     </div>
   );
 };

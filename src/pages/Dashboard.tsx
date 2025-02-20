@@ -11,6 +11,7 @@ import {
 } from "../services/xrpl";
 import { toast } from "sonner";
 import QRCodeStyling from "qr-code-styling";
+import { Footer } from "@/components/ui/footer";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -373,6 +374,7 @@ const Dashboard = () => {
           </div>
         </div>
       </div>
+      <Footer />
     </div>
   );
 };

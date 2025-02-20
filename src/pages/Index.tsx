@@ -4,7 +4,7 @@ import { validateXRPLAddress } from "../services/xrpl";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-
+import { Footer } from "@/components/ui/footer";
 const Index = () => {
   const [address, setAddress] = useState("");
   const navigate = useNavigate();
@@ -70,6 +70,7 @@ const Index = () => {
           Example: rHNTXD6a7VfFzQK9bNMkX4kYD8nLjhgb32
         </div>
       </div>
+      <Footer />
     </div>
   );
 };
