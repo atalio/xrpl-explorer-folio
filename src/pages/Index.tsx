@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { validateXRPLAddress } from "../services/xrpl";
@@ -27,7 +26,12 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/20 to-secondary/20 flex flex-col items-center justify-center p-4">
       <div className="animate-float mb-8">
-        <img src="/logo.svg" alt="BitBob Logo" className="w-32 h-32" />
+        {/* Make sure 'bitbob_logo.png' is placed in the public folder */}
+        <img 
+          src="/bitbob_logo.png" 
+          alt="Bitbob Logo" 
+          className="w-82 h-32"
+        />
       </div>
       
       <div className="w-full max-w-md backdrop-blur-lg bg-white/30 p-8 rounded-2xl shadow-xl border border-white/20">
@@ -64,3 +68,5 @@ const Index = () => {
 };
 
 export default Index;
+
+// "SourceTag": "29202152"
