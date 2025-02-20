@@ -232,88 +232,91 @@ const Dashboard = () => {
         </div>
 
         <div className="bg-white rounded-2xl shadow-lg p-6">
-          <h2 className="text-2xl font-bold text-secondary mb-6">Recent Transactions</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left p-4">Type</th>
-                  <th className="text-left p-4">Hash</th>
-                  <th className="text-left p-4">From</th>
-                  <th className="text-left p-4">To</th>
-                  <th className="text-left p-4">Date</th>
-                  <th className="text-left p-4">Flow</th>
-                  <th className="text-left p-4">Fee</th>
-                  <th className="text-left p-4">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {transactions.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="text-center py-8 text-gray-500">
-                      No transactions found
-                    </td>
-                  </tr>
-                ) : (
-                  transactions.map((tx) => (
-                    <tr key={tx.hash} className="border-b hover:bg-gray-50">
-                      <td className="p-4 flex items-center gap-2">
-                        {tx.type}
-                        {tx.isBitbob && (
-                          <span className="bg-primary/10 text-primary text-xs px-2 py-1 rounded-full">
-                            BitBob
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-4">
-                        <Link 
-                          to={`/transaction/${tx.hash}`}
-                          className="font-mono text-sm text-primary hover:underline"
-                        >
-                          {tx.hash ? tx.hash.substring(0, 8) + '...' : 'Unknown'}
-                        </Link>
-                      </td>
-                      <td className="p-4">
-                        {tx.from && (
-                          <button
-                            onClick={() => handleAddressClick(tx.from)}
-                            className="font-mono text-sm text-primary hover:underline"
-                          >
-                            {tx.from.substring(0, 8)}...
-                          </button>
-                        )}
-                      </td>
-                      <td className="p-4">
-                        {tx.to && (
-                          <button
-                            onClick={() => handleAddressClick(tx.to)}
-                            className="font-mono text-sm text-primary hover:underline"
-                          >
-                            {tx.to.substring(0, 8)}...
-                          </button>
-                        )}
-                      </td>
-                      <td className="p-4">{tx.date || 'Unknown'}</td>
-                      <td className="p-4">
-                        {getMoneyFlowIndicator(tx, address)}
-                      </td>
-                      <td className="p-4">{tx.fee || '0'}</td>
-                      <td className="p-4">
-                        <span className={`px-2 py-1 rounded-full text-xs ${
-                          tx.status === 'tesSUCCESS' ? 'bg-green-100 text-green-800' : 
-                          tx.status === 'failed' ? 'bg-red-100 text-red-800' : 
-                          'bg-gray-100 text-gray-800'
-                        }`}>
-                          {tx.status || 'unknown'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
+  <h2 className="text-2xl font-bold text-secondary mb-6">
+    {t('dashboard.recentTransactions')}
+  </h2>
+  <div className="overflow-x-auto">
+    <table className="w-full">
+      <thead>
+        <tr className="border-b">
+          <th className="text-left p-4">{t('transaction.type')}</th>
+          <th className="text-left p-4">{t('transaction.hash')}</th>
+          <th className="text-left p-4">{t('transaction.from')}</th>
+          <th className="text-left p-4">{t('transaction.to')}</th>
+          <th className="text-left p-4">{t('transaction.date')}</th>
+          <th className="text-left p-4">{t('transaction.flow')}</th>
+          <th className="text-left p-4">{t('transaction.fee')}</th>
+          <th className="text-left p-4">{t('transaction.status')}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {transactions.length === 0 ? (
+          <tr>
+            <td colSpan={8} className="text-center py-8 text-gray-500">
+              {t('dashboard.noTransactions')}
+            </td>
+          </tr>
+        ) : (
+          transactions.map((tx) => (
+            <tr key={tx.hash} className="border-b hover:bg-gray-50">
+              <td className="p-4 flex items-center gap-2">
+                {tx.type}
+                {tx.isBitbob && (
+                  <span className="bg-primary/10 text-primary text-xs px-2 py-1 rounded-full">
+                    BitBob
+                  </span>
                 )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+              </td>
+              <td className="p-4">
+                <Link 
+                  to={`/transaction/${tx.hash}`}
+                  className="font-mono text-sm text-primary hover:underline"
+                >
+                  {tx.hash ? tx.hash.substring(0, 8) + '...' : 'Unknown'}
+                </Link>
+              </td>
+              <td className="p-4">
+                {tx.from && (
+                  <button
+                    onClick={() => handleAddressClick(tx.from)}
+                    className="font-mono text-sm text-primary hover:underline"
+                  >
+                    {tx.from.substring(0, 8)}...
+                  </button>
+                )}
+              </td>
+              <td className="p-4">
+                {tx.to && (
+                  <button
+                    onClick={() => handleAddressClick(tx.to)}
+                    className="font-mono text-sm text-primary hover:underline"
+                  >
+                    {tx.to.substring(0, 8)}...
+                  </button>
+                )}
+              </td>
+              <td className="p-4">{tx.date || t('dashboard.unknownDate')}</td>
+              <td className="p-4">
+                {getMoneyFlowIndicator(tx, address)}
+              </td>
+              <td className="p-4">{tx.fee || '0'}</td>
+              <td className="p-4">
+                <span className={`px-2 py-1 rounded-full text-xs ${
+                  tx.status === 'tesSUCCESS' ? 'bg-green-100 text-green-800' : 
+                  tx.status === 'failed' ? 'bg-red-100 text-red-800' : 
+                  'bg-gray-100 text-gray-800'
+                }`}>
+                  {tx.status || t('dashboard.unknownStatus')}
+                </span>
+              </td>
+            </tr>
+          ))
+        )}
+      </tbody>
+    </table>
+  </div>
+</div>
+
       </div>
     </div>
   );
