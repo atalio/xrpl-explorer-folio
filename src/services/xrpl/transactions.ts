@@ -29,38 +29,49 @@ export const fetchTransactionDetails = async (hash: string): Promise<Transaction
     console.log("Raw transaction details:", response.result);
     
     const txInfo = response.result;
-    const memoData = txInfo.Memos?.[0]?.Memo?.MemoData;
+    // Use tx_json if available; otherwise use the top-level object.
+    const txJson = txInfo.tx_json || txInfo;
+    console.log("Using transaction data:", txJson);
+    
+    const memoData = txJson.Memos?.[0]?.Memo?.MemoData;
     const memo = memoData ? hexToAscii(memoData) : undefined;
 
-    const amount = txInfo.meta?.delivered_amount || txInfo.Amount || txInfo.DeliverMax;
-    // Fallback for fee: if Fee is not present, use a default or "0"
-    const feeRaw = txInfo.Fee || "0";
+    const amount = txInfo.meta?.delivered_amount || txJson.Amount || txJson.DeliverMax;
+    const feeRaw = txJson.Fee || txJson.fee || "0";
+
+    const fromValue = txJson.Account || txJson.account || "Unknown";
+    const destinationValue = txJson.Destination || txJson.destination;
+    const typeValue = txJson.TransactionType || txJson.transaction_type;
+
+    const destination = destinationValue || (typeValue === "OfferCreate" ? "XRPL DEX" : "Unknown");
+    const finalType = typeValue || "Unknown";
 
     const transactionDetail: TransactionDetail = {
       hash: txInfo.hash,
-      type: txInfo.TransactionType || txInfo.transaction_type || "Unknown",
-      date: txInfo.date ? formatXRPLDate(txInfo.date) : txInfo.close_time_iso || "Unknown",
+      type: finalType,
+      date: txJson.date ? formatXRPLDate(txJson.date) : txInfo.close_time_iso || "Unknown",
       amount: formatXRPAmount(amount),
       fee: formatXRPAmount(feeRaw),
       status: txInfo.meta.TransactionResult,
-      sourceTag: txInfo.SourceTag?.toString(),
-      from: txInfo.Account || txInfo.account || "Unknown",
-      to: txInfo.Destination || txInfo.destination || ( (txInfo.TransactionType || txInfo.transaction_type) === "OfferCreate" ? "XRPL DEX" : "Unknown" ),
+      sourceTag: txJson.SourceTag?.toString(),
+      from: fromValue,
+      to: destination,
       memo,
-      isBitbob: (txInfo.SourceTag === 29202152 || txInfo.SourceTag === "29202152" || (memo && memo.startsWith("BitBob"))),
-      sequence: txInfo.Sequence,
-      flags: Number(txInfo.Flags),
-      lastLedgerSequence: txInfo.LastLedgerSequence,
-      ticketSequence: txInfo.TicketSequence,
-      memos: txInfo.Memos?.map((memoObj: any) =>
-      memoObj.Memo?.MemoData ? hexToAscii(memoObj.Memo.MemoData) : ""
-    ).filter(Boolean) ?? [],
-    raw: txInfo
+      isBitbob: (txJson.SourceTag === 29202152 || txJson.SourceTag === "29202152" || (memo && memo.startsWith("BitBob"))),
+      sequence: txJson.Sequence,
+      flags: Number(txJson.Flags),
+      lastLedgerSequence: txJson.LastLedgerSequence,
+      ticketSequence: txJson.TicketSequence,
+      memos: txJson.Memos?.map((memoObj: any) =>
+        memoObj.Memo?.MemoData ? hexToAscii(memoObj.Memo.MemoData) : ""
+      ).filter(Boolean) ?? [],
+      raw: txInfo
     };
 
-    // Cache transaction details and last accessed address
+    // Cache the account from the transaction or fallback to a demo address.
+    const lastAddress = fromValue !== "Unknown" ? fromValue : "rHNTXD6a7VfFzQK9bNMkX4kYD8nLjhgb32";
     sessionStorage.setItem(`tx_${hash}`, JSON.stringify(transactionDetail));
-    sessionStorage.setItem("last_accessed_address", txInfo.Account);
+    sessionStorage.setItem("last_accessed_address", lastAddress);
 
     console.log("Processed transaction detail:", transactionDetail);
     return transactionDetail;
@@ -74,6 +85,8 @@ export const fetchTransactionDetails = async (hash: string): Promise<Transaction
     }
   }
 };
+
+
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -117,21 +130,17 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
         return null;
       }
       
-      // Use fallback to lower-case keys if uppercase not found.
-      let accountField = txData.Account || txData.account;
-      let destinationField = txData.Destination || txData.destination;
-      let transactionType = txData.TransactionType || txData.transaction_type;
-  
-      // Fallback: if destination or type are missing, try to get them from meta
-      if (!destinationField && meta && meta.Destination) {
-        destinationField = meta.Destination;
-      }
-      if (!transactionType && meta && meta.TransactionType) {
-        transactionType = meta.TransactionType;
-      }
-  
-      const destination = destinationField || (transactionType === "OfferCreate" ? "XRPL DEX" : "Unknown");
-  
+      // Debug logging: inspect txData and meta for Payment transactions
+      console.log("Mapping transaction:", { hash, txData, meta });
+      
+      // Check both upper and lower-case keys
+      const accountField = txData.Account || txData.account || "Unknown";
+      const destinationField = txData.Destination || txData.destination; 
+      const transactionType = txData.TransactionType || txData.transaction_type;
+    
+      // For 'to', if destinationField is not found, and if it's an OfferCreate, set to "XRPL DEX", else "Unknown"
+      const destination = destinationField ? destinationField : (transactionType === "OfferCreate" ? "XRPL DEX" : "Unknown");
+    
       let amount = "0";
       if (meta.delivered_amount) {
         amount = meta.delivered_amount;
@@ -142,17 +151,17 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
       } else if (txData.Amount?.value) {
         amount = txData.Amount.value;
       }
-  
-      // Fallback for fee: check both uppercase and lowercase
+    
+      // Fallback for fee: check both uppercase and lowercase keys
       const feeRaw = txData.Fee || txData.fee || meta.Fee || "0";
-  
+    
       let isBitbob = false;
       let memo = "";
-  
+    
       if (txData.SourceTag === 29202152 || txData.SourceTag === "29202152") {
         isBitbob = true;
       }
-  
+    
       if (txData.Memos?.length > 0) {
         const memoData = txData.Memos[0]?.Memo?.MemoData;
         if (memoData) {
@@ -162,10 +171,10 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
           }
         }
       }
-  
-      // Use ISO timestamp if available, otherwise fallback to UNIX timestamp
+    
+      // Use ISO timestamp if available; otherwise fallback to UNIX timestamp from txData.date
       const timestamp = closeTimeIso ? new Date(closeTimeIso).getTime() / 1000 : txData.date;
-  
+    
       return {
         hash: hash,
         type: transactionType || "Unknown",
@@ -187,6 +196,7 @@ export const fetchTransactions = async (address: string): Promise<Transaction[]>
       }
       return isValid;
     });
+  
   
 
     console.log(`[XRPL] Successfully processed ${transactions.length} transactions`);

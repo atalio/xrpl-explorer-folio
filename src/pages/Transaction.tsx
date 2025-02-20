@@ -31,14 +31,20 @@ const Transaction = () => {
 
   // Merge fetched details with any extra details passed via navigation state
   const mergeTransaction = (fetched: TransactionDetail): TransactionDetail => {
+    // Prefer the transaction passed in navigation state
     const stateTx = (location.state as { transaction?: TransactionDetail })?.transaction;
     return {
       ...fetched,
-      from: fetched.from || stateTx?.from || "Unknown",
-      to: fetched.to || stateTx?.to || "Unknown",
-      type: fetched.type || stateTx?.type || "Unknown",
+      from: stateTx?.from ?? fetched.from ?? "Unknown",
+      to: stateTx?.to ?? fetched.to ?? "Unknown",
+      type: stateTx?.type ?? fetched.type ?? "Unknown",
     };
   };
+  
+  const demoAddress = "rHNTXD6a7VfFzQK9bNMkX4kYD8nLjhgb32";
+  
+
+  
 
   useEffect(() => {
     const loadTransaction = async () => {
@@ -79,10 +85,11 @@ const Transaction = () => {
     loadTransaction();
   }, [hash, location.state]);
 
+
   const getDashboardAddress = () => {
-    if (transaction && transaction.from) return transaction.from;
+    if (transaction && transaction.from && transaction.from !== "Unknown") return transaction.from;
     const last = sessionStorage.getItem("last_accessed_address");
-    return last || "";
+    return (last && last !== "Unknown") ? last : demoAddress;
   };
 
   const handleDashboardClick = () => {
@@ -132,7 +139,11 @@ const Transaction = () => {
       </div>
     );
   }
-
+  {process.env.NODE_ENV === 'development' && (
+    <pre className="mt-4 p-2 bg-gray-200 text-xs">
+      {JSON.stringify(transaction, null, 2)}
+    </pre>
+  )}
   // Use merged transaction details
   const { from, to, type } = transaction;
   const fee = transaction.fee === "0.000000 XRP" ? "0.000012 XRP" : transaction.fee;

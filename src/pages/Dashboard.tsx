@@ -1,5 +1,3 @@
-// SourceTag: 29202152
-// Ensure you install: npm install qr-code-styling
 import { useEffect, useRef, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import {
@@ -58,9 +56,18 @@ const VanityQRCode = ({ data }: { data: string }) => {
   return <div ref={ref} />;
 };
 
-
 const Dashboard = () => {
   const { address } = useParams<{ address: string }>();
+  // Define effectiveAddress: use demo address if none provided or "default"
+const demoAddress = "rHNTXD6a7VfFzQK9bNMkX4kYD8nLjhgb32";
+// const getDashboardAddress = () => {
+//   if (transaction && transaction.from && transaction.from !== "Unknown") return transaction.from;
+//   const last = sessionStorage.getItem("last_accessed_address");
+//   return (last && last !== "Unknown") ? last : demoAddress;
+// };
+
+  const effectiveAddress = !address || address === "default" ? demoAddress : address;
+  
   const { t } = useLanguage();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [rawResponse, setRawResponse] = useState<string>("");
@@ -82,8 +89,8 @@ const Dashboard = () => {
 
   useEffect(() => {
     const loadData = async () => {
-      addLog(`Starting loadData. Address: ${address}`);
-      if (!address) {
+      addLog(`Starting loadData. Address: ${effectiveAddress}`);
+      if (!effectiveAddress) {
         addLog("No address provided, skipping data load.");
         setLoading(false);
         return;
@@ -92,8 +99,8 @@ const Dashboard = () => {
       try {
         addLog("Fetching transactions and balance.");
         const [txs, bal] = await Promise.all([
-          fetchTransactions(address),
-          fetchBalance(address)
+          fetchTransactions(effectiveAddress),
+          fetchBalance(effectiveAddress)
         ]);
         addLog(`Fetched transactions: ${txs.length}, balance: ${bal.total}`);
         const consoleOutput = (window as any).__xrpl_debug_response;
@@ -114,7 +121,7 @@ const Dashboard = () => {
       }
     };
     loadData();
-  }, [address]);
+  }, [effectiveAddress]);
 
   const handleSearch = () => {
     addLog("Search button pressed.");
@@ -203,11 +210,11 @@ const Dashboard = () => {
                   <Hash className="h-4 w-4" />
                   <span>{t("dashboard.address")}</span>
                 </div>
-                <Button variant="ghost" size="icon" onClick={() => copyToClipboard(address || "")}>
+                <Button variant="ghost" size="icon" onClick={() => copyToClipboard(effectiveAddress)}>
                   <Copy className="h-4 w-4" />
                 </Button>
               </div>
-              <p className="font-mono text-sm break-all">{address || "Example: rHNTXD6a7VfFzQK9bNMkX4kYD8nLjhgb32"}</p>
+              <p className="font-mono text-sm break-all">{effectiveAddress || "Example: rHNTXD6a7VfFzQK9bNMkX4kYD8nLjhgb32"}</p>
             </div>
             <div className="p-4 bg-primary/10 rounded-lg">
               <p className="text-sm text-gray-600 flex items-center gap-2">
@@ -226,10 +233,10 @@ const Dashboard = () => {
             <div className="p-4 bg-primary/10 rounded-lg flex justify-center items-center">
               <div style={{ textAlign: "center" }}>
                 <QrCode style={{ height: 20, width: 20, color: "#1A1F2C" }} />
-                {address ? (
+                {effectiveAddress ? (
                   <>
-                    <VanityQRCode data={address} />
-                    <p className="font-mono text-xs mt-2">{address}</p>
+                    <VanityQRCode data={effectiveAddress} />
+                    <p className="font-mono text-xs mt-2">{effectiveAddress}</p>
                   </>
                 ) : (
                   <p className="text-sm text-gray-500">No XRPL address provided</p>
@@ -272,10 +279,7 @@ const Dashboard = () => {
             </CollapsibleContent>
           </Collapsible>
 
-          {/* <Button variant="secondary" onClick={() => setShowLogs(!showLogs)}>
-            {showLogs ? "Hide Debug Logs" : "Show Debug Logs"}
-          </Button> */}
-
+          {/* Optionally display debug logs */}
           {showLogs && (
             <div className="mt-4 p-4 bg-gray-100 rounded-lg text-xs overflow-x-auto max-h-64">
               <h4 className="font-bold mb-2">Debug Logs:</h4>
@@ -353,7 +357,7 @@ const Dashboard = () => {
                         )}
                       </td>
                       <td className="p-4">{tx.date || t("dashboard.unknownDate")}</td>
-                      <td className="p-4">{getMoneyFlowIndicator(tx, address)}</td>
+                      <td className="p-4">{getMoneyFlowIndicator(tx, effectiveAddress)}</td>
                       <td className="p-4">{tx.fee || "0"}</td>
                       <td className="p-4">
                         <span className={`px-2 py-1 rounded-full text-xs ${
