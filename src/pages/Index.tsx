@@ -56,7 +56,7 @@ const Index = () => {
         </form>
 
         <div className="mt-4 text-sm text-center text-gray-600">
-          Example: rsuUjfWxrACCAwGQDsNeZUhpzXf1n1NK5Z
+          Example: rHNTXD6a7VfFzQK9bNMkX4kYD8nLjhgb32
         </div>
       </div>
     </div>
