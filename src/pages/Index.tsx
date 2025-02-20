@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { validateXRPLAddress } from "../services/xrpl";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,14 @@ import { Button } from "@/components/ui/button";
 const Index = () => {
   const [address, setAddress] = useState("");
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Automatically redirect to dashboard if URL is accessed directly
+  useEffect(() => {
+    if (location.pathname === "/dashboard") {
+      navigate("/dashboard/default");
+    }
+  }, [location.pathname, navigate]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,7 +34,6 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/20 to-secondary/20 flex flex-col items-center justify-center p-4">
       <div className="animate-float mb-8">
-        {/* Make sure 'bitbob_logo.png' is placed in the public folder */}
         <img 
           src="/bitbob_logo.png" 
           alt="Bitbob Logo" 
