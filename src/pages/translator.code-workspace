@@ -1,0 +1,23 @@
+{
+	"folders": [
+		{
+			"path": "../../../translator"
+		},
+		{
+			"path": "../../../pay-quester-qr"
+		},
+		{
+			"path": "../../../.."
+		},
+		{
+			"path": "../../../../../pay-quester-qr/dist"
+		},
+		{
+			"path": "../../../../../pay-quester-qr"
+		},
+		{
+			"path": "../../../../.."
+		}
+	],
+	"settings": {}
+}

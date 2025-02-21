@@ -236,8 +236,13 @@ const demoAddress = "rHNTXD6a7VfFzQK9bNMkX4kYD8nLjhgb32";
                 {effectiveAddress ? (
                   <>
                     <VanityQRCode data={effectiveAddress} />
-                    <p className="font-mono text-xs mt-2">{effectiveAddress}</p>
+                    <p className="font-mono text-xs break-all">{effectiveAddress || "Example: rHNTXD6a7VfFzQK9bNMkX4kYD8nLjhgb32"}
+                    <Button variant="ghost" size="icon" onClick={() => copyToClipboard(effectiveAddress)}>
+                  <Copy className="h-4 w-4" />
+                </Button>
+                    </p>
                   </>
+                  
                 ) : (
                   <p className="text-sm text-gray-500">No XRPL address provided</p>
                 )}
@@ -259,11 +264,10 @@ const demoAddress = "rHNTXD6a7VfFzQK9bNMkX4kYD8nLjhgb32";
                 {t("dashboard.search")}
               </Button>
             </div>
-            <p className="text-xs text-gray-600">
+            <p className="font-mono text-xs break-all">
               Example: rHNTXD6a7VfFzQK9bNMkX4kYD8nLjhgb32
             </p>
-          </div>
-
+            </div>
           <Collapsible className="mb-4">
             <CollapsibleTrigger className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700">
               <Code className="h-4 w-4" />
