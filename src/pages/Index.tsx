@@ -35,7 +35,7 @@ const Index = () => {
     <div className="min-h-screen bg-gradient-to-br from-primary/20 to-secondary/20 flex flex-col items-center justify-center p-4">
       <div className="animate-float mb-8">
         <img 
-          src="/bitbob_logo.png" 
+          src="/bb_blue.png" 
           alt="Bitbob Logo" 
           className="w-82 h-32"
         />
